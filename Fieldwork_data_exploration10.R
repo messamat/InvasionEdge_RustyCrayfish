@@ -23,10 +23,15 @@ library(png)
 library(grid)
 library(car)
 
+rootdir <- "F:/Chapter3_ecoevo/" #UPDATE!
+datadir <- file.path(rootdir, 'data')
+resdir <- file.path(rootdir, 'results')
+figdir <- file.path(rootdir, 'doc/Manuscript/Figures')
+
 ##########################################################################################################################################################
 ################################################################################## 1. FORMAT DATA #####################################################
 ############## Format CPUE ########
-CPUEOR <- read.csv("F:/Chapter3_ecoevo/Fieldworkdata/CPUE_OR.csv")
+CPUEOR <- read.csv(file.path(datadir,"Fieldworkdata/CPUE_OR.csv"))
 
 #Format CPUE for mapping
 CPUEOR_kickmean <- ddply(CPUEOR[CPUEOR$Method == "Kick",], c("Site", "Method"), summarise, kickmean = mean(CPUE/Effort), kickstd=sd(CPUE/Effort))
@@ -36,19 +41,19 @@ CPUEOR_melt <- melt(CPUEOR_mean, id.var=c('Site','Method'))
 CPUEOR_cast <- cast(CPUEOR_melt, Site~Method+variable)
 CPUEOR_cast <- CPUEOR_cast[,-which(colnames(CPUEOR_cast) %in% c("Dipnetting_std","Snork/Dipnetting_mean","Snork/Dipnetting_std","Snorkeling_std", "Snorkeling/Dipnetting_mean","Snorkeling/Dipnetting_std"))]
 #After joining table to sites, make sure to create new field and replace NA by NULL if needed
-# write.dbf(CPUEOR_mean, "F:/Chapter2_HexSim_Crayfish/Field_work_Data/CPUE_OR_stat.dbf")
-# write.dbf(CPUEOR_kickmean, "F:/Chapter2_HexSim_Crayfish/Field_work_Data/CPUEkick_OR_stat.dbf")
-# write.dbf(CPUEOR_dipmean, "F:/Chapter2_HexSim_Crayfish/Field_work_Data/CPUEdip_OR_stat.dbf")
+# write.dbf(CPUEOR_mean, "F:/Chapter2_HexSim_Crayfish/data/Field_work_Data/CPUE_OR_stat.dbf")
+# write.dbf(CPUEOR_kickmean, "F:/Chapter2_HexSim_Crayfish/data/Field_work_Data/CPUEkick_OR_stat.dbf")
+# write.dbf(CPUEOR_dipmean, "F:/Chapter2_HexSim_Crayfish/data/Field_work_Data/CPUEdip_OR_stat.dbf")
 
 ################################################# FORMAT SITE-LEVEL HABITAT DATA #############################
 #Data on distance between site and closest downstream confluence
-site_streamdist <- read.csv("F:/Chapter3_ecoevo/Fieldworkdata/Sampled_sites_gps_streamdist_edit.csv")
+site_streamdist <- read.csv(file.path(datadir,"Fieldworkdata/Sampled_sites_gps_streamdist_edit.csv"))
 #Habitat data (Velocity, depth, temperature,etc.)
-habdat <- read.csv("F:/Chapter3_ecoevo/Fieldworkdata/Site_habdat3.csv")
+habdat <- read.csv(file.path(datadir,"Fieldworkdata/Site_habdat3.csv"))
 #Sampling info for site
-siteinfo <- read.csv("F:/Chapter3_ecoevo/Fieldworkdata/Site_info.csv")
+siteinfo <- read.csv(file.path(datadir,"Fieldworkdata/Site_info.csv"))
 #Macroinvertebrate data
-macroinv <- read.csv("F:/Chapter3_ecoevo/Macroinv_analysis/Bug_Labwork_spreadsheet.csv")
+macroinv <- read.csv(file.path(datadir,"Bug_Labwork_spreadsheet.csv"))
 macroinv$DW_net <- macroinv$DW - macroinv$Dish_weight  
 macroinv$AFDW <- macroinv$DW_net - (macroinv$AW/1000)
 
@@ -117,11 +122,13 @@ habdatdistinfo[habdatdistinfo$River_Tributary == 'Rock Creek', 'Spread_dist'] <-
 habdatdistinfo[habdatdistinfo$River_Tributary == 'South Fork', 'Spread_dist'] <- habdatdistinfo[habdatdistinfo$River_Tributary == 'South Fork', 'interval'] + abs(JDSF-introdist)
 
 ############## Get network COMID (see end of script Crayfish_model_visualization for joining of sites with network) #######
-sitesnetjoin <- read.dbf('F:/Hexsim/Crayfish_model/Parameters_and_outputs/Network_23/Network23_test16_2025/Sampled_sites_notes_CPUE_kick_edges_18_join_1.dbf')
+sitesnetjoin <- read.dbf(file.path(datadir,'Sampled_sites_notes_CPUE_kick_edges_18_join_1.dbf'))
+#Original path: "F:\Chapter2_HexSim_Crayfish\src\Crayfish_model\Parameters_and_outputs\Network_23\Network23_test16_2025\Sampled_sites_notes_CPUE_kick_edges_18_join_1.dbf"
 sitesnetjoin <- sitesnetjoin[,c('Site_ID', 'COMID','rid')]
 colnames(sitesnetjoin) <- c('Site','COMID','rid')
 ############## Get modeled stream temperature ######################
-temp <- read.csv('F:/Hexsim/Data/ISEMP/HexSim_ready/tempdat_9920_mean.csv')
+temp <- read.csv(file.path(datadir,'tempdat_9920_mean.csv'))
+#Original path: "F:\Chapter2_HexSim_Crayfish\data\ISEMP\HexSim_ready\tempdat_9920_mean.csv"
 colnames(temp)
 habdatdistinfo <- merge(habdatdistinfo, sitesnetjoin, by='Site', all.x=T)
 habdatdistinfo[habdatdistinfo$Site == 43, 'rid'] <- 676 #Nudge Murderer's Creek site a little downstream to get invasion time estimate from model
@@ -132,22 +139,20 @@ habdatdistinfo$degdays <- rowSums(t(t(habdatdistinfo[,grepl('X20', colnames(habd
 temp[temp$rid == 1383 | temp$rid == 1704,]
 
 ############## Get NHD monthly estimated discharge data ############
-networkflow <- read.dbf('F:/Hexsim/Data/River_network/NHDplus_streams_HU6clip_format_UTM_positiveflow_perennial_McNysetpointjoin_correct_withfields_o025_nodry.dbf')
+networkflow <- read.dbf(file.path(datadir,'NHDplus_streams_HU6clip_format_UTM_positiveflow_perennial_McNysetpointjoin_correct_withfields_o025_nodry.dbf'))
+#Original path: "F:\Chapter2_HexSim_Crayfish\data\River_network\NHDplus_streams_HU6clip_format_UTM_positiveflow_perennial_McNysetpointjoin_correct_withfields_o025_nodry.dbf"
 habdatdistinfo <- merge(habdatdistinfo, networkflow[,c('COMID',colnames(networkflow)[grepl('Q0001E',colnames(networkflow))])], by='COMID', all.x=T,all.y=F)
 # which(networkflow$COMID != networkflow$COMID_1)
 # which(networkflow$COMID != networkflow$COMID_12) #Don't use COMID_12
 
 
 ############## Get average modeled first invasion date #####################
-#Define network and scenario
-network = 23
-test = "16_2025"
-
 #HexSim output directory
-root_dir <- paste("F:/Hexsim/Crayfish_model/Network_", network, "/Results/Network", network, "_test", test, sep = "")
+root_dir <- file.path(datadir, 'Network23_test16_2025')
+#Original path: "F:\Chapter2_HexSim_Crayfish\src\Crayfish_model\Network_23\Results\Network23_test16_2025"
 #Wanted directory to write results
-root_dir_out <- paste("F:/Hexsim/Crayfish_model/Parameters_and_outputs/Network_", network, "/Network", 
-                      network, "_test", test, sep = "")
+root_dir_out <- file.path(resdir, 'Network23_test16_2025')
+#Original path: "F:\Chapter2_HexSim_Crayfish\src\Crayfish_model\Parameters_and_outputs\Network_23\Network23_test16_2025"
 #List all directories in HexSim output directory, each corresponding to 
 scenario_reps_list <- list.files(root_dir)
 
@@ -183,7 +188,7 @@ habdatdistinfo[habdatdistinfo$Site >= 106 & habdatdistinfo$River_Tributary == 'U
 
 ################################################# PUT CRAYFISH DATA TOGETHER ###############################################################
 #Import crayfish individual data
-craydat <- read.csv("F:/Chapter3_ecoevo/Fieldworkdata/Crayfish_4.csv")
+craydat <- read.csv(file.path(datadir,"Fieldworkdata/Crayfish_4.csv"))
 
 #Correct some quirks in Crayfish data (fill in NAs)
 craydat <- craydat[!is.na(craydat$Cray_ID),]
@@ -197,14 +202,14 @@ craydat[craydat$Site==10 & is.na(craydat$Meso_type),'Meso_type'] <- 'Ru'
 
 
 #Join with RNADNA data
-RNADNA_dat <- read.csv("F:/Chapter3_ecoevo/RNADNA_analysis/Results/RNADNA_datformat.csv")
+RNADNA_dat <- read.csv(file.path(resdir,"RNADNA_analysis/RNADNA_datformat.csv"))
 RNADNA_dat[RNADNA_dat$Site == 20 & RNADNA_dat$Cray_ID == 21, 'Cray_ID'] <- 20
-RNADNA_params_format <- read.csv("F:/Chapter3_ecoevo/RNADNA_analysis/Results/RNADNA_paramsformat.csv")
+RNADNA_params_format <- read.csv(file.path(resdir,"RNADNA_analysis/RNADNA_paramsformat.csv"))
 craydat <-merge(craydat, RNADNA_dat, by=c('Site','Cray_ID'), all.x=T, all.y=T)
 #Missing ones: 2/17 (digestion did not work), 113/8 (digestion did not work),2/6,27/27
 
 #Join with isotope data
-isodat <- read.csv('F:/Chapter3_ecoevo/Isotope_analysis/Messager JDR-Cray2016Trays1-4 0217_format.csv')
+isodat <- read.csv(file.path(datadir,'Isotope_analysis/Messager JDR-Cray2016Trays1-4 0217_format.csv'))
 isodat$Sample.ID <- as.character(isodat$Sample.ID)
 isodat[isodat$Sample.ID == '35-D-O','Sample.ID'] <- '35-D-17'
 isodat[isodat$Sample.ID == '15F-6','Sample.ID'] <- '15-F-6'
@@ -481,7 +486,7 @@ craydat_stat[craydat_stat$Site == 27, 'AFDWmean'] <- craydat_stat[craydat_stat$S
 # sqrt(RNADNAratio_mean), sqrt(greenmean), sqrt(cyanomean)?,sqrt(diatommean),log(AFDWmean),log(Kick_mean),log(Q0001E_MA)
 
 ##########################################################################################################################################################
-setwd("F:/Chapter3_ecoevo/Dataexplo/")
+setwd(file.path(resdir,"Dataexplo/"))
 #Total number of crayfish collected at sites used in the analysis
 sum(CPUEOR[CPUEOR$Site %in% craydat_stat[craydat_stat$ncray >10 & !is.na(craydat_stat$trophiclevel_mean), 'Site'],'CPUE'])
 
@@ -692,10 +697,6 @@ craydat_meso <-ddply(craydat, .(Site, Meso_type, Spread_dist), function(x) nrow(
 craydat_mesoplot <-ggplot(craydat_meso, aes(x=factor(Site),y=V1)) + geom_bar(aes(fill=Meso_type),stat='identity') + theme_bw() +
   scale_x_discrete(name='Count')
 ggsave('site_trophiclevel0_mesohabitatspread.png', plot=craydat_mesoplot, width = 10, height = 12, units='in')
-
-
-
-
 
 ############################################################################################
 ################################################# CRAYFISH-LEVEL DATA
@@ -2187,7 +2188,7 @@ ggplot(CPUEOR_meandistinfo, aes(x = Density_estimate_min, y = Trap, color = Rive
 ##########################################################################################################################################################
 
 ################################################################################## 3. MODEL DATA AT CRAYFISH LEVEL #####################################################
-setwd("F:/Chapter3_ecoevo/Datamod/")
+setwd(file.path(resdir,"Datamod/"))
 ############################################################################################
 ################################################## LINEAR MIXED EFFECT MODELS ##############
 #Good intro: http://www.ssc.wisc.edu/sscc/pubs/MM/MM_Models.html
@@ -4795,13 +4796,13 @@ JDNF2 <- 292349
 confluences <- c(0, 379.179-c(JDSF/1000, JDNF2/1000))
 
 #Get images of edges
-img <- readPNG("F:/Chapter3_ecoevo/Article/Figures/Minimaps/mainstem3.png")
+img <- readPNG(file.path(figdir,"Minimaps/mainstem3.png"))
 g <- rasterGrob(img, interpolate=TRUE)
-img_nf <- readPNG("F:/Chapter3_ecoevo/Article/Figures/Minimaps/northfork2.png")
+img_nf <- readPNG(file.path(figdir,"Minimaps/northfork2.png"))
 g_nf <- rasterGrob(img_nf, interpolate=TRUE)
-img_sf <- readPNG("F:/Chapter3_ecoevo/Article/Figures/Minimaps/southfork2.png")
+img_sf <- readPNG(file.path(figdir,"Minimaps/southfork2.png"))
 g_sf <- rasterGrob(img_sf, interpolate=TRUE)
-# img_um <- readPNG("F:/Chapter3_ecoevo/Article/Figures/Minimaps/upstmain.png")
+# img_um <- readPNG(file.path(figdir,"Minimaps/upstmain.png"))
 # g_um <- rasterGrob(img_um, interpolate=TRUE)
 
 
@@ -4954,7 +4955,7 @@ RNADNA_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(
 #grid.draw(rbind(ggplotGrob(RNADNA_spreadist_upst), ggplotGrob(RNADNA_spreadist_main)))
 
 ##########EXPORT FIGURE ###############
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/Chela_TP_RNADNA_7.pdf', width=3.14961, height=5.90551)
+pdf(file.path(figdir,'Trends/Chela_TP_RNADNA_7.pdf'), width=3.14961, height=5.90551)
 grid.arrange(rbind(ggplotGrob(Chela_spreadist_upst), ggplotGrob(Chela_spreadist_main),
                 ggplotGrob(TP_spreadist_upst), ggplotGrob(TP_spreadist_main),
                 ggplotGrob(RNADNA_spreadist_upst), ggplotGrob(RNADNA_spreadist_main), size='last'))
@@ -5007,7 +5008,7 @@ CL_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(cray
 #grid.newpage()
 #grid.draw(rbind(ggplotGrob(CL_spreadist_upst), ggplotGrob(CL_spreadist_main)))
 
-# pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/CL_sp.pdf', width=5, height=3)
+# pdf(file.path(figdir,'Trends/CL_sp.pdf'), width=5, height=3)
 # grid.draw(rbind(ggplotGrob(CL_spreadist_upst), ggplotGrob(CL_spreadist_main)))
 # dev.off()
 ##########CLsd Figure ######
@@ -5114,7 +5115,7 @@ weight_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(
 
 
 ##########EXPORT FIGURE #######
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/CL_CLsd_weight.pdf', width=3.14961, height=5.90551)
+pdf(file.path(figdir,'Trends/CL_CLsd_weight.pdf'), width=3.14961, height=5.90551)
 grid.arrange(rbind(ggplotGrob(CL_spreadist_upst), ggplotGrob(CL_spreadist_main),
                    ggplotGrob(CLsd_spreadist_upst), ggplotGrob(CLsd_spreadist_main),
                    ggplotGrob(weight_spreadist_upst), ggplotGrob(weight_spreadist_main)))
@@ -5141,7 +5142,7 @@ craydat_CPUEplot$SE_L <- with(craydat_CPUEplot, Kick_mean-1.96*Kick_std/sqrt(6))
 
 #Get map for plot
 
-img <- readPNG("F:/Chapter3_ecoevo/Article/Figures/Minimaps/CPUE_minimap2.png")
+img <- readPNG(file.path(figdir,"Minimaps/CPUE_minimap2.png"))
 gcpue <- rasterGrob(img, interpolate=TRUE)
 
 
@@ -5183,7 +5184,7 @@ CPUE_spreadist <- ggplot(craydat_CPUEplot,aes(x = Spread_dist, y = Kick_mean)) +
         text= element_text(size=8))
 CPUE_spreadist
 
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/CPUE_small_expand1.pdf', width=3.14961, height=2)
+pdf(file.path(figdir,'Trends/CPUE_small_expand1.pdf'), width=3.14961, height=2)
 CPUE_spreadist
 dev.off()
 
@@ -5214,7 +5215,7 @@ CPUE_spreadist <- ggplot(craydat_CPUEplot,
         legend.background = element_blank())
 CPUE_spreadist
 
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/CPUE_small_expand1large.pdf', width=6, height=4)
+pdf(file.path(figdir,'Trends/CPUE_small_expand1large.pdf'), width=6, height=4)
 CPUE_spreadist
 dev.off()
 
@@ -5262,7 +5263,7 @@ sex_spreadist_upst2  <- ggplot(craydat_stat[craydat_stat$ncray >=10 &
 # grid.newpage()
 # grid.draw(rbind(ggplotGrob(sex_spreadist_upst), ggplotGrob(sex_spreadist_main), ggplotGrob(sex_spreadist_main2)))
 
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/sexratio.pdf', width=3.14961, height=2.952755)
+pdf(file.path(figdir,'Trends/sexratio.pdf'), width=3.14961, height=2.952755)
 grid.arrange(rbind(ggplotGrob(sex_spreadist_upst2),
                    ggplotGrob(sex_spreadist_main2), size='last'))
 dev.off()
@@ -5305,7 +5306,7 @@ chelasexsp_gam2 <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper m
   coord_cartesian(ylim=c(-2,1.5)) +
   theme_classic()
 
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/chela_sexsp.pdf', width=3.14961, height=5.8)
+pdf(file.path(figdir,'Trends/chela_sexsp.pdf'), width=3.14961, height=5.8)
 grid.arrange(chelasexsp_gam1,chelasexsp_gam2)
 dev.off()
 
@@ -5494,7 +5495,7 @@ diatom_spreadist_upst <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) &
         axis.line.x=element_blank())
 
 
-pdf('F:/Chapter3_ecoevo/Article/Figures/Trends/ENV2.pdf', width=7, height=5)
+pdf(file.path(figdir,'Trends/ENV2.pdf'), width=7, height=5)
 grid.arrange(rbind(ggplotGrob(degdays_spreadist_upst), ggplotGrob(degdays_spreadist_main),
                    ggplotGrob(AFDW_spreadist_upst), ggplotGrob(AFDW_spreadist_main), size='last'),
              rbind(ggplotGrob(green_spreadist_upst),ggplotGrob(green_spreadist_main),
@@ -5505,8 +5506,8 @@ dev.off()
 
 #################################################################################################################################
 ####################### COMPARE DATA WITH SORENSON 2012 ###################
-sorenson_082010<- read.csv("F:/Chapter3_ecoevo/Orusticus_netdata_Sorenson_082010.csv", colClasses = c('factor', 'numeric', 'numeric','character','numeric','character'))
-sorenson_082011<- read.csv("F:/Chapter3_ecoevo/Orusticus_netdata_Sorenson_082011.csv", colClasses = c('factor', 'numeric', 'numeric','character','numeric','character'))
+sorenson_082010<- read.csv(file.path(datadir,"Orusticus_netdata_Sorenson_082010.csv"), colClasses = c('factor', 'numeric', 'numeric','character','numeric','character'))
+sorenson_082011<- read.csv(file.path(datadir,"Orusticus_netdata_Sorenson_082011.csv"), colClasses = c('factor', 'numeric', 'numeric','character','numeric','character'))
 clydeholliday_2016 <- craydatOR[craydatOR$Site == 35,]
 str(sorenson_082010)
 colnames(clydeholliday_2016[,1:30])
