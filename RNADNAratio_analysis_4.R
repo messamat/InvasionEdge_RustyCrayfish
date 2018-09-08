@@ -7,6 +7,10 @@ library(grid)
 library(gridExtra)
 library(abind)
 
+rootdir <- "F:/Chapter3_ecoevo/" #UPDATE!
+datadir <- file.path(rootdir, 'data/RNADNA_analysis/JDR_OR')
+resdir <- file.path(rootdir, 'results/RNADNA_analysis')
+
 ############################FUNCTIONS TO IMPORT, FORMAT, AND PROCESS DATA ##############################
 plotstandard <- function(data, standard, params, plateref, ylim) {
   ggplot(data[grepl(paste(standard), data$inst),], aes(x=con, y=rep1)) + 
@@ -24,7 +28,7 @@ RNADNAcomp <- function(date, plate) {
   
   ref <- paste(date, '0', plate,sep="")
   #Read in tables after making sure they exist. Otherwise, throw error
-  root <- paste('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/Mathis_2017',date,'_RNADNAratio_Plate',as.character(plate),sep="")
+  root <- paste(file.path(datadir,'Mathis_2017'),date,'_RNADNAratio_Plate',as.character(plate),sep="")
   if (file.exists(paste(root,'_format','.xls',sep=''))) {
     fluo <- read_xls(paste(root,'_format','.xls',sep=''))
   } else {
@@ -142,7 +146,7 @@ RNADNAcomp_RNAreplace <- function(date, plate) {
   
   ref <- paste(date, '0', plate,sep="")
   #Read in tables after making sure they exist. Otherwise, throw error
-  root <- paste('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/Mathis_2017',date,'_RNADNAratio_Plate',as.character(plate),sep="")
+  root <- paste(file.path(datadir,'Mathis_2017'),date,'_RNADNAratio_Plate',as.character(plate),sep="")
   if (file.exists(paste(root,'_format','.xls',sep=''))) {
     fluo <- read_xls(paste(root,'_format','.xls',sep=''))
   } else {
@@ -259,17 +263,17 @@ RNADNA_090101 <- RNADNAcomp('0901',1)
 RNADNA_dat <- as.data.frame(setNames(replicate(length(colnames(RNADNA_090101$data)),numeric(0), simplify = F),colnames(RNADNA_090101$data)))
 RNADNA_params <-  as.data.frame(setNames(replicate(length(colnames(RNADNA_090101$params)),numeric(0), simplify = F),colnames(RNADNA_090101$params)))
 
-labdates <- unique(substr(list.files('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR'), 12,15))
+labdates <- unique(substr(list.files(datadir), 12,15))
 
 #Run function for plates with the right RNA standard curves
 for (date_loop in labdates[1:5]) {
   for (plate_loop in 1:4) {
     tryCatch({
-      #print(paste('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/Mathis_2017',date_loop,'_RNADNAratio_Plate',as.character(plate_loop),'.xls',sep=""))
+      #print(paste(file.path(datadir,'Mathis_2017'),date_loop,'_RNADNAratio_Plate',as.character(plate_loop),'.xls',sep=""))
       RNADNA_comped <- RNADNAcomp(date_loop,plate_loop)
       RNADNA_dat <- rbind(RNADNA_dat,RNADNA_comped$data)
       RNADNA_params <- rbind(RNADNA_params,RNADNA_comped$params)
-      ggsave(filename= paste0('curves',date_loop,'0',plate_loop,'.png'), plot=RNADNA_comped$plots,path='F:/Chapter3_ecoevo/RNADNA_analysis/QA_QC')
+      ggsave(filename= paste0('curves',date_loop,'0',plate_loop,'.png'), plot=RNADNA_comped$plots,path= file.path(resdir, 'QA_QC'))
     }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
   }
 }
@@ -278,11 +282,11 @@ for (date_loop in labdates[1:5]) {
 for (date_loop in labdates[6:12]) {
   for (plate_loop in 1:4) {
     tryCatch({
-      #print(paste('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/Mathis_2017',date_loop,'_RNADNAratio_Plate',as.character(plate_loop),'.xls',sep=""))
+      #print(paste(file.path(datadir,'Mathis_2017'),date_loop,'_RNADNAratio_Plate',as.character(plate_loop),'.xls',sep=""))
       RNADNA_comped <- RNADNAcomp_RNAreplace(date_loop,plate_loop)
       RNADNA_dat <- rbind(RNADNA_dat,RNADNA_comped$data)
       RNADNA_params <- rbind(RNADNA_params,RNADNA_comped$params)
-      ggsave(filename= paste0('curves',date_loop,'0',plate_loop,'.png'), plot=RNADNA_comped$plots,path='F:/Chapter3_ecoevo/RNADNA_analysis/QA_QC')
+      ggsave(filename= paste0('curves',date_loop,'0',plate_loop,'.png'), plot=RNADNA_comped$plots,path=file.path(resdir, 'QA_QC'))
     }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")})
   }
 }
@@ -294,7 +298,7 @@ print(paste0('Analyzing RNA/DNA ratio data from ', date, ', plate ', plate))
 
 ref <- paste(date, '0', plate,sep="")
 #Read in tables after making sure they exist. Otherwise, throw error
-root <- paste('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/Mathis_2017',date,'_RNADNAratio_Plate',as.character(plate),sep="")
+root <- paste(file.path(datadir,'Mathis_2017'),date,'_RNADNAratio_Plate',as.character(plate),sep="")
 if (file.exists(paste(root,'_format','.xls',sep=''))) {
   fluo <- read_xls(paste(root,'_format','.xls',sep=''))
 } else {
@@ -385,7 +389,7 @@ print(paste0('Analyzing RNA/DNA ratio data from ', date, ', plate ', plate))
 
 ref <- paste(date, '0', plate,sep="")
 #Read in tables after making sure they exist. Otherwise, throw error
-root <- paste('F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/Mathis_2017',date,'_RNADNAratio_Plate',as.character(plate),sep="")
+root <- paste(file.path(datadir,'Mathis_2017'),date,'_RNADNAratio_Plate',as.character(plate),sep="")
 if (file.exists(paste(root,'_format','.xls',sep=''))) {
   fluo <- read_xls(paste(root,'_format','.xls',sep=''))
 } else {
@@ -470,8 +474,6 @@ RNADNA_params <- rbind(RNADNA_params,params)
 
 #######################################################################################################################################
 #######Look at distribution of parameters#########
-dir <- 'F:/Chapter3_ecoevo/RNADNA_analysis/Results/JDR_OR/'
-
 qplot(RNADNA_params$mRD)
 qplot(RNADNA_params$mRR)
 qplot(RNADNA_params$mDD)
@@ -486,54 +488,54 @@ RNADNA_params_format$RD_RRratio <- RNADNA_params_format$mRD/RNADNA_params_format
 
 ###################################################### INSPECT AND CORRECT STANDARD CURVES #######################################################################
 ##090102 Corrections: replace 500ng/ml and 1000ng/ml values as higher than other plates that day, which increases RD/DR ratio 
-# RNADNA_090101 <- read_xls(paste0(dir, 'Mathis_20170901_RNADNAratio_Plate1_format.xls'))
-# RNADNA_090102 <- read_xls(paste0(dir, 'Mathis_20170901_RNADNAratio_Plate2.xls'))
-# RNADNA_090103 <- read_xls(paste0(dir, 'Mathis_20170901_RNADNAratio_Plate3.xls'))
+# RNADNA_090101 <- read_xls(paste0(datadir, 'Mathis_20170901_RNADNAratio_Plate1_format.xls'))
+# RNADNA_090102 <- read_xls(paste0(datadir, 'Mathis_20170901_RNADNAratio_Plate2.xls'))
+# RNADNA_090103 <- read_xls(paste0(datadir, 'Mathis_20170901_RNADNAratio_Plate3.xls'))
 # RNADNA_090102[1,12:13] <- rowMeans(abind(RNADNA_090101[1,12:13], RNADNA_090103[1,12:13], along=3), dims=2, na.rm=T)
-# WriteXLS(RNADNA_090102, paste0(dir,'Mathis_20170901_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090102, paste0(datadir,'Mathis_20170901_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
 
 # #090402 & 090403 Corrections: replace the first five points of the DR curve with the average of values from a day for which the max value for DR is similar
-# RNADNA_090402 <- read_xls(paste0(dir, 'Mathis_20170904_RNADNAratio_Plate2.xls'))
-# RNADNA_090403 <- read_xls(paste0(dir, 'Mathis_20170904_RNADNAratio_Plate3.xls'))
+# RNADNA_090402 <- read_xls(paste0(datadir, 'Mathis_20170904_RNADNAratio_Plate2.xls'))
+# RNADNA_090403 <- read_xls(paste0(datadir, 'Mathis_20170904_RNADNAratio_Plate3.xls'))
 # 
-# RNADNA_092401 <- read_xls(paste0(dir, 'Mathis_20170924_RNADNAratio_Plate1.xls'))
-# RNADNA_092402 <- read_xls(paste0(dir, 'Mathis_20170924_RNADNAratio_Plate2.xls'))
-# RNADNA_092403 <- read_xls(paste0(dir, 'Mathis_20170924_RNADNAratio_Plate3.xls'))
-# RNADNA_092404 <- read_xls(paste0(dir, 'Mathis_20170924_RNADNAratio_Plate4.xls'))
+# RNADNA_092401 <- read_xls(paste0(datadir, 'Mathis_20170924_RNADNAratio_Plate1.xls'))
+# RNADNA_092402 <- read_xls(paste0(datadir, 'Mathis_20170924_RNADNAratio_Plate2.xls'))
+# RNADNA_092403 <- read_xls(paste0(datadir, 'Mathis_20170924_RNADNAratio_Plate3.xls'))
+# RNADNA_092404 <- read_xls(paste0(datadir, 'Mathis_20170924_RNADNAratio_Plate4.xls'))
 # 
 # RNADNA_090402[4,2:11] <- rowMeans(abind(RNADNA_092401[4,2:11],RNADNA_092402[4,2:11],RNADNA_092403[4,2:11],RNADNA_092404[4,2:11], along=3), dims=2, na.rm=T)
 # RNADNA_090403[4,2:11] <- rowMeans(abind(RNADNA_092401[4,2:11],RNADNA_092402[4,2:11],RNADNA_092403[4,2:11],RNADNA_092404[4,2:11], along=3), dims=2, na.rm=T)
 # 
-# WriteXLS(RNADNA_090402, paste0(dir,'Mathis_20170904_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
-# WriteXLS(RNADNA_090403, paste0(dir,'Mathis_20170904_RNADNAratio_Plate3_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090402, paste0(datadir,'Mathis_20170904_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090403, paste0(datadir,'Mathis_20170904_RNADNAratio_Plate3_format.xls'),row.names = FALSE)
 # 
 # #090601, 090602, 090603 Corrections: DD curve has an errroneous value for 400 ng/ml
-# RNADNA_090601 <- read_xls(paste0(dir, 'Mathis_20170906_RNADNAratio_Plate1.xls'))
-# RNADNA_090602 <- read_xls(paste0(dir, 'Mathis_20170906_RNADNAratio_Plate2.xls'))
-# RNADNA_090603 <- read_xls(paste0(dir, 'Mathis_20170906_RNADNAratio_Plate3.xls'))
+# RNADNA_090601 <- read_xls(paste0(datadir, 'Mathis_20170906_RNADNAratio_Plate1.xls'))
+# RNADNA_090602 <- read_xls(paste0(datadir, 'Mathis_20170906_RNADNAratio_Plate2.xls'))
+# RNADNA_090603 <- read_xls(paste0(datadir, 'Mathis_20170906_RNADNAratio_Plate3.xls'))
 # 
 # RNADNA_090601[3,10:11] <- NA
 # RNADNA_090602[3,10:11] <- NA
 # RNADNA_090603[3,10:11] <- NA
 # 
-# WriteXLS(RNADNA_090601, paste0(dir,'Mathis_20170906_RNADNAratio_Plate1_format.xls'),row.names = FALSE)
-# WriteXLS(RNADNA_090602, paste0(dir,'Mathis_20170906_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
-# WriteXLS(RNADNA_090603, paste0(dir,'Mathis_20170906_RNADNAratio_Plate3_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090601, paste0(datadir,'Mathis_20170906_RNADNAratio_Plate1_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090602, paste0(datadir,'Mathis_20170906_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090603, paste0(datadir,'Mathis_20170906_RNADNAratio_Plate3_format.xls'),row.names = FALSE)
 # 
 # #091402 Corrections: max RR concentration, nothing was in the plate
-# RNADNA_091402 <- read_xls(paste0(dir, 'Mathis_20170914_RNADNAratio_Plate2.xls'))
+# RNADNA_091402 <- read_xls(paste0(datadir, 'Mathis_20170914_RNADNAratio_Plate2.xls'))
 # RNADNA_091402[2,12] <- NA
 # 
-# WriteXLS(RNADNA_091402, paste0(dir,'Mathis_20170914_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_091402, paste0(datadir,'Mathis_20170914_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
 # 
 # ############################################# INSPECT AND CORRECT CRAYFISH RNA/DNA DATA #######################################################
-# RNADNA_090702 <- read_xls(paste0(dir, 'Mathis_20170907_RNADNAratio_Plate2.xls'))
+# RNADNA_090702 <- read_xls(paste0(datadir, 'Mathis_20170907_RNADNAratio_Plate2.xls'))
 # RNADNA_090702[7,2:7] <- NA
-# WriteXLS(RNADNA_090702, paste0(dir,'Mathis_20170907_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_090702, paste0(datadir,'Mathis_20170907_RNADNAratio_Plate2_format.xls'),row.names = FALSE)
 # 
-# RNADNA_092404 <- read_xls(paste0(dir, 'Mathis_20170924_RNADNAratio_Plate4.xls'))
+# RNADNA_092404 <- read_xls(paste0(datadir, 'Mathis_20170924_RNADNAratio_Plate4.xls'))
 # RNADNA_092404[6,2:7] <- NA
-# WriteXLS(RNADNA_092404, paste0(dir,'Mathis_20170924_RNADNAratio_Plate4_format.xls'),row.names = FALSE)
+# WriteXLS(RNADNA_092404, paste0(datadir,'Mathis_20170924_RNADNAratio_Plate4_format.xls'),row.names = FALSE)
 
 RNADNA_dat$day <- substr(RNADNA_dat$ref,1,4)
 ggplot(RNADNA_dat, aes(x=ref, y=ratio, color=factor(Site))) + geom_point(size=3)
@@ -542,33 +544,9 @@ ggplot(RNADNA_dat, aes(x=Site, y=ratio, color=factor(day))) + geom_point(size=3)
 
 RNADNA_dat[duplicated(RNADNA_dat[,c('Site','Cray_ID')]),]
 
-craydat <- read.csv("F:/Chapter3_ecoevo/Fieldworkdata/Crayfish_4.csv")
+craydat <- read.csv(file.path(rootdir, 'data/Fieldworkdata/Crayfish_4.csv'))
 craydat_RNADNA <- merge(craydat, RNADNA_dat, by=c('Site',"Cray_ID"), all.x=T, all.y=T)
 #2 missing ones 27/27, and 2/6
 
-write.csv(RNADNA_dat, "F:/Chapter3_ecoevo/RNADNA_analysis/Results/RNADNA_datformat.csv", row.names=F)
-write.csv(RNADNA_params_format, "F:/Chapter3_ecoevo/RNADNA_analysis/Results/RNADNA_paramsformat.csv", row.names=F)
-
-
-############################################### EXTRA STUFF #######################################################################
-# RNADNA_090102 <- RNADNAcomp('0901',2)
-# RNADNA_dat <- rbind(RNADNA_dat, RNADNA_090102$data)
-# RNADNA_params <- rbind(RNADNA_params, RNADNA_090102$params)
-# ggsave(filename='curves090102.png', plot=RNADNA_090102$plots,path='F:/Chapter3_ecoevo/RNADNA_analysis/QA_QC')
-# 
-# RNADNA_090103 <- RNADNAcomp('0901',3)
-# RNADNA_dat <- rbind(RNADNA_dat, RNADNA_090103$data)
-# RNADNA_params <- rbind(RNADNA_params, RNADNA_090103$params)
-# ggsave(filename='curves090103.png', plot=RNADNA_090103$plots,path='F:/Chapter3_ecoevo/RNADNA_analysis/QA_QC')
-
-#Make a plot of all samples and their replicates to look at variability
-#ggplot(datformat, aes_string(x='inst', y='rep1')) + geom_segment(aes_string(xend = 'inst', yend = 'rep2'), size =3) + theme_bw()
-
-
-
-
-
-
-
-
-
+write.csv(RNADNA_dat, file.path(resdir,"RNADNA_datformat.csv"), row.names=F)
+write.csv(RNADNA_params_format, file.path(resdir,"RNADNA_paramsformat.csv"), row.names=F)
