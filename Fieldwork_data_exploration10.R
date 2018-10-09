@@ -7,7 +7,7 @@ library(plyr)
 library(reshape)
 library(foreign)
 library(scales)
-#library(vegan)
+library(vegan)
 library(pastecs)
 library(data.table)
 library(lme4)
@@ -16,12 +16,13 @@ library(bbmle)
 library(quantreg)
 library(hexbin)
 library(viridis)
-#library(gam)
+library(gam)
 library(mgcv)
 library(nortest)
 library(png)
 library(grid)
 library(car)
+library(boot)
 
 rootdir <- "F:/Chapter3_ecoevo/" #UPDATE!
 datadir <- file.path(rootdir, 'data')
@@ -4920,7 +4921,7 @@ RNADNA_spreadist_main <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'U
   annotate('text', x=260,y=3, label='Downstream', angle=90, size=2.5, color='#016c59') +
   annotate('text', x=160, y=0.7, label='Mainstem', size=2.5) +
   theme_classic() + 
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(0,7), expand=c(0,0), breaks=c(0,2,4,6), name='Physiological fitness (RNA/DNA)') + 
   theme(plot.margin=unit(c(0,0,0.1,0), "cm"), 
         axis.title.y=element_text(size=9),
@@ -4942,7 +4943,7 @@ RNADNA_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(
   annotate('text', x=40, y=2.2, label='South Fork', angle=90, size=2.5) +
   geom_segment(data=RDsegdat, aes(x=x1, xend=x2, y=y1, yend=y2))  +
   annotate('text', x=c(64,101), y=c(6, 3.6), label=c('**', '**'), size=4)+
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(0,7), expand=c(0,0), breaks=c(0,2,4,6),name='Physiological fitness (RNA/DNA)') + 
   geom_vline(xintercept = confluences) +
   theme(axis.title.x = element_blank(),
@@ -5162,6 +5163,7 @@ craydat_CPUEplot[craydat_CPUEplot$gam_CPUE_sp_seL<0, 'gam_CPUE_sp_seL'] <- 0
 craydat_CPUEplot[craydat_CPUEplot$gam_CPUE_sp <0, 'gam_CPUE_sp'] <- 0
 craydat_CPUEplot$plotrib <- factor(craydat_CPUEplot$plotrib, levels=c("Mainstem", "South Fork", "North Fork"), labels=c("Mainstem", "South Fork", "North Fork"))
 
+
 CPUE_spreadist <- ggplot(craydat_CPUEplot,aes(x = Spread_dist, y = Kick_mean)) +
   geom_ribbon(aes(ymin = gam_CPUE_sp_seL, ymax = gam_CPUE_sp_seU), alpha=0.5, fill='#bdc9e1')+
   geom_line(aes(y=(gam_CPUE_sp)), size=1, alpha=0.75)+
@@ -5174,8 +5176,8 @@ CPUE_spreadist <- ggplot(craydat_CPUEplot,aes(x = Spread_dist, y = Kick_mean)) +
   geom_vline(xintercept = confluences) +
   #geom_smooth(span=0.5) +
   theme_classic() +
-  scale_x_continuous(limits=c(0,320), expand=c(0,0), name='Distance from location of initial introduction (km)') +
-  scale_y_continuous(limits=c(-20,45), expand=c(0.02,0),breaks=c(0,10,20,30,40),name='Kick-seining CPUE (crayfish/m)') +
+  scale_x_continuous(limits=c(0,320), expand=c(0,0), name='Distance from initial introduction (km)') +
+  scale_y_continuous(limits=c(-20,45), expand=c(0.02,0),breaks=c(0,10,20,30,40),name=expression(paste('Kick-seining CPUE (crayfish/',~m^2,')',sep=""))) +
   geom_hline(yintercept=0) +
   coord_cartesian(y=c(0,40)) +
   theme(plot.margin=unit(c(0.5,0.2,0,0), "cm"),
@@ -5197,14 +5199,14 @@ CPUE_spreadist <- ggplot(craydat_CPUEplot,
   geom_point(data=craydat_CPUEplot[craydat_CPUEplot$ncray>0,],size=3, alpha=0.75, aes(color=plotrib))+
   scale_color_manual(name='', values=c('#1b9e77','#7570b3', '#d95f02')) +
   geom_point(data=craydat_CPUEplot[craydat_CPUEplot$ncray==0,],aes(color=plotrib) ,size=3, alpha=0.75,shape=13)+
-  annotate('text', x=81, y=36,label='NF conflu.', angle=90, size=4) +
-  annotate('text', x=38, y=36, label='SF conflu.', angle=90, size=4) +
+  annotate('text', x=81, y=36,label='North Fork', angle=90, size=4) +
+  annotate('text', x=38, y=36, label='South Fork', angle=90, size=4) +
   annotation_custom(gcpue, xmin=240, xmax=290, ymin=28, ymax=43) +
-  geom_vline(xintercept = confluences) +
+  geom_vline(xintercept = confluences, linetype = "dashed") +
   #geom_smooth(span=0.5) +
   theme_classic() +
-  scale_x_continuous(limits=c(0,320), expand=c(0,0), name='Distance from location of initial introduction (km)') +
-  scale_y_continuous(limits=c(-20,45), expand=c(0.02,0),breaks=c(0,10,20,30,40),name='Kick-seining CPUE (crayfish/m)') +
+  scale_x_continuous(limits=c(0,320), expand=c(0,0), name='Distance from initial introduction (km)') +
+  scale_y_continuous(limits=c(-20,45), expand=c(0.02,0),breaks=c(0,10,20,30,40),name=expression(paste('Kick-seining CPUE (crayfish/',~m^2,')',sep=""))) +
   geom_hline(yintercept=0) +
   coord_cartesian(y=c(0,40)) +
   theme(plot.margin=unit(c(0.5,0.2,0,0), "cm"),
@@ -5215,7 +5217,7 @@ CPUE_spreadist <- ggplot(craydat_CPUEplot,
         legend.background = element_blank())
 CPUE_spreadist
 
-pdf(file.path(figdir,'Trends/CPUE_small_expand1large.pdf'), width=6, height=4)
+pdf(file.path(figdir,'Trends/CPUE_small_expand1large_20181008.pdf'), width=6, height=4)
 CPUE_spreadist
 dev.off()
 
@@ -5231,7 +5233,7 @@ sex_spreadist_main2 <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upp
   annotate('text', x=160, y=0.3, label='Mainstem', size=2.5) +
   annotation_custom(g, xmin=200, xmax=250, ymin=28, ymax=48) +
   theme_classic() +
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-2,2), expand=c(0,0), breaks=c(0.2, 0.4,0.6,0.8), labels=c(20,40,60,80),name='% males') +
   coord_cartesian(ylim=c(0.2,0.8)) +
   theme(plot.margin=unit(c(0,0.05,0,0), "cm"),
@@ -5302,7 +5304,7 @@ chelasexsp_gam2 <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper m
   geom_line(size=1, alpha=0.75, color='#016c59') + 
   geom_point(aes(y=gam_chela_sp_pred+gam_chela_sexsp_res),size=3, alpha=0.75, color='#1c9099') + 
   scale_y_continuous(name='Chela length partial residuals (mm)', limits=c(-3.1,3), breaks=c(-3,-2,-1,0,1,2,3), expand=c(0,0)) +
-  scale_x_continuous(name='Distance from location of initial introduction (km)', limits=c(0,250)) +
+  scale_x_continuous(name='Distance from initial introduction (km)', limits=c(0,250)) +
   coord_cartesian(ylim=c(-2,1.5)) +
   theme_classic()
 
@@ -5329,7 +5331,7 @@ degdays_spreadist_main <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) 
   annotation_custom(g, xmin=200, xmax=250, ymin=0.5, ymax=3) +
   #geom_text(aes(label=Site)) +
   theme_classic() + 
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(3500,5300), expand=c(0,0), breaks=c(3500,4000,4500, 5000), labels=c(3.5, 4.0, 4.5,5.0),name='Degree days (10???C)') + 
   theme(axis.title.x = element_blank(),
         plot.margin=unit(c(-0.1,0.5,0,0), "cm"))
@@ -5350,7 +5352,7 @@ degdays_spreadist_upst <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) 
   annotate('text', x=40, y=3800, label='South Fork', angle=90, size=2.5) +
   geom_segment(data=Chelasegdat, aes(x=x1, xend=x2, y=y1, yend=y2))  +
   annotate('text', x=101, y=2.5, label='***', size=4)+
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(3500,5300), expand=c(0,0), breaks=c(3500, 4000,4500,5000), labels=c(3.5, 4.0,4.5, 5.0),name='Degree days (???C)') + 
   geom_vline(xintercept = confluences) +
   theme(plot.margin=unit(c(0.25,0.5,0,0), "cm"),
@@ -5373,7 +5375,7 @@ AFDW_spreadist_main <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) & (
   annotation_custom(g, xmin=200, xmax=250, ymin=0.5, ymax=3) +
   #geom_text(aes(label=Site)) +
   theme_classic() + 
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-1,1), expand=c(0,0), breaks=c(0,0.20,0.40),name='Macroinvertebrate biomass (AFDW, g)') + 
   coord_cartesian(ylim=c(0,0.6)) + 
   theme(axis.title.y = element_text(hjust=0.05, vjust=-1.25, size=9),
@@ -5396,7 +5398,7 @@ AFDW_spreadist_upst <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) & (
   annotate('text', x=40, y=0.08, label='South Fork', angle=90, size=2.5) +
   geom_segment(data=Chelasegdat, aes(x=x1, xend=x2, y=y1, yend=y2))  +
   annotate('text', x=101, y=2.5, label='***', size=4)+
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-1,1), expand=c(0,0), breaks=c(0,0.20,0.40),name='Macroinvertebrate biomass (AFDW, g)') + 
   coord_cartesian(ylim=c(0,0.6)) + 
   geom_vline(xintercept = confluences) +
@@ -5421,7 +5423,7 @@ green_spreadist_main <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) & 
   #annotation_custom(g, xmin=200, xmax=250, ymin=0.5, ymax=3) +
   #geom_text(aes(label=Site)) +
   theme_classic() + 
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-3,5), breaks=c(0,0.25,0.50,0.75,1.00),name='Green algae concentration (Ch-a ug/cm-2)') + 
   coord_cartesian(ylim=c(0,1.00))+
   geom_hline(yintercept = 0) +
@@ -5440,7 +5442,7 @@ green_spreadist_upst <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) & 
   annotate('text', x=260,y=50, label='Upstream', angle=90, size=2.5,color='#045a8d') +
   annotate('text', x=83, y=15, label='North Fork', angle=90, size=2.5) +
   annotate('text', x=40, y=15, label='South Fork', angle=90, size=2.5) +
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-0.50,2.00), breaks=c(0,.25,.50,.75,1.00),name='Green algae concentration (Ch-a ug/cm-2)') + 
   coord_cartesian(ylim=c(0,1.00))+
   geom_hline(yintercept=0) +
@@ -5463,7 +5465,7 @@ diatom_spreadist_main <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) &
   #annotation_custom(g, xmin=200, xmax=250, ymin=0.5, ymax=3) +
   #geom_text(aes(label=Site)) +
   theme_classic() + 
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-0.50,6.00), breaks=c(0,1.00,2.00,3.00,4.00),name='Diatom concentration (Ch-a ug/cm-2)') + 
   coord_cartesian(ylim=c(0,4.00))+
   geom_hline(yintercept = 0) +
@@ -5483,7 +5485,7 @@ diatom_spreadist_upst <- ggplot(habdatdistinfo[!is.na(habdatdistinfo$AFDWmean) &
   # annotation_custom(g_sf, xmin=40, xmax=90, ymin=0.5, ymax=3) +
   annotate('text', x=83, y=50, label='North Fork', angle=90, size=2.5) +
   annotate('text', x=40, y=50, label='South Fork', angle=90, size=2.5) +
-  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from location of initial introduction (km)') +
+  scale_x_continuous(limits=c(0,270), expand=c(0,0), name='Distance from initial introduction (km)') +
   scale_y_continuous(limits=c(-0.50,6.00), breaks=c(0,1.00,2.00,3.00,4.00),name='Diatom concentration (Ch-a ug/cm-2)') + 
   coord_cartesian(ylim=c(0,4.00))+
   geom_vline(xintercept = confluences) +
