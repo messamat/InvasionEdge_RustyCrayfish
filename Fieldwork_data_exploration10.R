@@ -16,7 +16,7 @@ library(bbmle)
 library(quantreg)
 library(hexbin)
 library(viridis)
-library(gam)
+#library(gam)
 library(mgcv)
 library(nortest)
 library(png)
@@ -35,9 +35,9 @@ figdir <- file.path(rootdir, 'doc/Manuscript/Figures')
 CPUEOR <- read.csv(file.path(datadir,"Fieldworkdata/CPUE_OR.csv"))
 
 #Format CPUE for mapping
-CPUEOR_kickmean <- ddply(CPUEOR[CPUEOR$Method == "Kick",], c("Site", "Method"), summarise, kickmean = mean(CPUE/Effort), kickstd=sd(CPUE/Effort))
-CPUEOR_dipmean <- ddply(CPUEOR[CPUEOR$Method == "Dipnetting",], c("Site", "Method"), summarise, dipmean = mean(CPUE/Effort),  dipstd=sd(CPUE/Effort))
-CPUEOR_mean <- ddply(CPUEOR, c("Site", "Method"), summarise, mean = mean(CPUE/Effort), std=sd(CPUE/Effort))
+CPUEOR_kickmean <- ddply(CPUEOR[CPUEOR$Method == "Kick",], c("Site", "Method"), summarize, kickmean = mean(CPUE/Effort), kickstd=sd(CPUE/Effort))
+CPUEOR_dipmean <- ddply(CPUEOR[CPUEOR$Method == "Dipnetting",], c("Site", "Method"), summarize, dipmean = mean(CPUE/Effort),  dipstd=sd(CPUE/Effort))
+CPUEOR_mean <- ddply(CPUEOR, c("Site", "Method"), summarize, mean = mean(CPUE/Effort), std=sd(CPUE/Effort))
 CPUEOR_melt <- melt(CPUEOR_mean, id.var=c('Site','Method'))
 CPUEOR_cast <- cast(CPUEOR_melt, Site~Method+variable)
 CPUEOR_cast <- CPUEOR_cast[,-which(colnames(CPUEOR_cast) %in% c("Dipnetting_std","Snork/Dipnetting_mean","Snork/Dipnetting_std","Snorkeling_std", "Snorkeling/Dipnetting_mean","Snorkeling/Dipnetting_std"))]
@@ -49,6 +49,9 @@ CPUEOR_cast <- CPUEOR_cast[,-which(colnames(CPUEOR_cast) %in% c("Dipnetting_std"
 ################################################# FORMAT SITE-LEVEL HABITAT DATA #############################
 #Data on distance between site and closest downstream confluence
 site_streamdist <- read.csv(file.path(datadir,"Fieldworkdata/Sampled_sites_gps_streamdist_edit.csv"))
+#Get river kilomter of tributary confluences (modify JDNF to match with site 2 even though Site 2 interval is slightly off - to help reader see confluence)
+JDNF2 <- 292349
+confluences <- c(0, 379.179-c(JDSF/1000, JDNF2/1000))
 #Habitat data (Velocity, depth, temperature,etc.)
 habdat <- read.csv(file.path(datadir,"Fieldworkdata/Site_habdat3.csv"))
 #Sampling info for site
@@ -139,14 +142,6 @@ habdatdistinfo$degdays <- rowSums(t(t(habdatdistinfo[,grepl('X20', colnames(habd
 
 temp[temp$rid == 1383 | temp$rid == 1704,]
 
-############## Get NHD monthly estimated discharge data ############
-networkflow <- read.dbf(file.path(datadir,'NHDplus_streams_HU6clip_format_UTM_positiveflow_perennial_McNysetpointjoin_correct_withfields_o025_nodry.dbf'))
-#Original path: "F:\Chapter2_HexSim_Crayfish\data\River_network\NHDplus_streams_HU6clip_format_UTM_positiveflow_perennial_McNysetpointjoin_correct_withfields_o025_nodry.dbf"
-habdatdistinfo <- merge(habdatdistinfo, networkflow[,c('COMID',colnames(networkflow)[grepl('Q0001E',colnames(networkflow))])], by='COMID', all.x=T,all.y=F)
-# which(networkflow$COMID != networkflow$COMID_1)
-# which(networkflow$COMID != networkflow$COMID_12) #Don't use COMID_12
-
-
 ############## Get average modeled first invasion date #####################
 #HexSim output directory
 root_dir <- file.path(datadir, 'Network23_test16_2025')
@@ -167,7 +162,7 @@ mininvyear <- lapply(scenario_reps_list, function(x) {
   scenario_reps_res_list <- as.vector(list.files(scenario_rep))
   scenario_reps_res<-paste(scenario_rep, scenario_reps_res_list[pmatch("Dens",scenario_reps_res_list)], sep = "/")
   temp_dens <- read.csv(scenario_reps_res)
-  temp_densdat <- temp_dens[temp_dens$Reach %in% sitesnetjoin$rid,]
+  temp_densdat <- temp_dens[temp_dens$Reach %in% habdatdistinfo$rid,]
   mininvyr <- adply(temp_densdat[,2:314], 1, function(x) {
     minyr <- min(as.numeric(substr(colnames(x[which(x>0)]),6,10)))
     minyr[minyr==Inf] <- NA
@@ -183,9 +178,8 @@ colnames(mininvyear_df)[1] <- 'rid'
 
 #Get towns' location on the network
 JD_towns <-data.frame(town=c('John day','Mount Vernon','Dayville','Spray'),town_dist=c(391271,378420,335231,268244))
+habdatdistinfo <- merge(habdatdistinfo, mininvyear_df, by='rid')
 habdatdistinfo[habdatdistinfo$Site >= 106 & habdatdistinfo$River_Tributary == 'Upper mainstem', 'meaninvyr'] <- 9
-
-
 
 ################################################# PUT CRAYFISH DATA TOGETHER ###############################################################
 #Import crayfish individual data
@@ -193,6 +187,7 @@ craydat <- read.csv(file.path(datadir,"Fieldworkdata/Crayfish_4.csv"))
 
 #Correct some quirks in Crayfish data (fill in NAs)
 craydat <- craydat[!is.na(craydat$Cray_ID),]
+craydat[is.na(craydat$Sex), 'Sex'] <- 'F' #Assume that crayfish with no determined sex are females (small crayfish)
 craydat[craydat$Meso_type=='RuorRi' & !is.na(craydat$Meso_type),'Meso_type'] <- 'Ri-Ru'
 craydat[craydat$Meso_type=='Po/Ru'& !is.na(craydat$Meso_type),'Meso_type'] <- 'Ru-Ro'
 craydat[craydat$Meso_type=='Ru or Pool-edge'& !is.na(craydat$Meso_type),'Meso_type'] <- 'Pool-edge'
@@ -200,7 +195,6 @@ craydat[craydat$Site==27 & is.na(craydat$Meso_type),'Meso_type'] <- 'Ru'
 craydat[craydat$Site==20 & is.na(craydat$Meso_type),'Meso_type'] <- 'Ru'
 craydat[craydat$Site==8 & is.na(craydat$Meso_type),'Meso_type'] <- 'Ru'
 craydat[craydat$Site==10 & is.na(craydat$Meso_type),'Meso_type'] <- 'Ru'
-
 
 #Join with RNADNA data
 RNADNA_dat <- read.csv(file.path(resdir,"RNADNA_analysis/RNADNA_datformat.csv"))
@@ -309,7 +303,7 @@ mean(abs(craydat[!is.na(craydat$Weight) & is.na(craydat$Miss_App),'Weight'] - ex
 par(mfrow=c(2,2))
 plot(Weight_CL_lm)
 par(mfrow=c(1,1))
-qplot(craydat$Weight_CL_lm_res)
+qplot(craydat$CL_Weight_nls_res)
 craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),'CL_weight_lm_pred'] <- predict(Weight_CL_lm) 
 craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),'CL_weight_lm_res'] <- residuals(Weight_CL_lm)
 CL_Weight_loglog <- ggplot(craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),], aes(x = CL, y = Weight)) +
@@ -342,37 +336,66 @@ MLE.res.R
 #By nls
 Weight_CL_nls <- nls(Weight~b*CL^c, data=craydat[!is.na(craydat$Weight) & is.na(craydat$Miss_App),], start=c(b=0.1,c=3), trace=T)
 summary(Weight_CL_nls)
-Weight_CL_nlsfun <- function(CL) {log10(0.0002243*CL^3.11812)}
-craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),'CL_weight_pred'] <- predict(Weight_CL_nls) 
-craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),'CL_weight_nls_res'] <- residuals(Weight_CL_nls)
+Weight_CL_nlsfun <- function(CL) {
+  data.frame(summary(Weight_CL_nls)$coefficients)['b', 'Estimate']*CL^data.frame(summary(Weight_CL_nls)$coefficients)['c', 'Estimate']
+}
+# craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),'CL_weight_pred'] <- predict(Weight_CL_nls) 
+# craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),'CL_Weight_nls_res'] <- residuals(Weight_CL_nls)
 qplot(log10(residuals(Weight_CL_nls)))
 plot(Weight_CL_nls)
+
+#With Non-linear least-square model separated between males and females
+Weight_CL_nls_F <- nls(Weight~b*CL^c, data=craydat[!is.na(craydat$Weight) & craydat$Sex == 'F',], start=c(b=0.1,c=3), trace=T)
+summary(Weight_CL_nls_F)
+Weight_CL_nls_M <- nls(Weight~b*CL^c, data=craydat[!is.na(craydat$Weight) & craydat$Sex == 'M',], start=c(b=0.1,c=3), trace=T)
+summary(Weight_CL_nls_M)
+mean(c(abs(craydat[!is.na(craydat$Weight) & craydat$Sex == 'M','Weight'] - predict(Weight_CL_nls_M)),
+       abs(craydat[!is.na(craydat$Weight) & craydat$Sex == 'F','Weight'] - predict(Weight_CL_nls_F))))
+
+Weight_CL_nlsfun_F <- function(CL) {
+  data.frame(summary(Weight_CL_nls_F)$coefficients)['b', 'Estimate']*CL^data.frame(summary(Weight_CL_nls_F)$coefficients)['c', 'Estimate']
+}
+Weight_CL_nlsfun_M <- function(CL) {
+  data.frame(summary(Weight_CL_nls_M)$coefficients)['b', 'Estimate']*CL^data.frame(summary(Weight_CL_nls_M)$coefficients)['c', 'Estimate']
+}
+
+craydat[!is.na(craydat$Weight) & craydat$Sex == 'F','CL_Weight_nls_pred'] <- predict(Weight_CL_nls_F) 
+craydat[!is.na(craydat$Weight) & craydat$Sex == 'F','CL_Weight_nls_res'] <- residuals(Weight_CL_nls_F)
+craydat[!is.na(craydat$Weight) & craydat$Sex == 'M','CL_Weight_nls_pred'] <- predict(Weight_CL_nls_M) 
+craydat[!is.na(craydat$Weight) & craydat$Sex == 'M','CL_Weight_nls_res'] <- residuals(Weight_CL_nls_M)
+qplot(residuals(Weight_CL_nls_F))
+qplot(residuals(Weight_CL_nls_M))
+
 
 CL_Weight_nls <- ggplot(craydat[!is.na(craydat$Weight)& is.na(craydat$Miss_App),], aes(x = CL, y = Weight)) +
   geom_point() + 
   #geom_text(aes(label = Site, size = 3), check_overlap = TRUE) +
   #geom_text(aes(label = Cray_ID, size =3), hjust = 1.5, color = "red",check_overlap = TRUE) +
-  stat_function(fun = Weight_CL_nlsfun, color = "#225ea8", size = 1.25) +
-  scale_x_log10(breaks=c(5,10,20,30,40,50)) +
-  scale_y_log10(breaks=c(0.1,1,10,25,50))+
+  stat_function(fun = Weight_CL_nlsfun, color = "black", size = 1.25) + 
+  stat_function(fun = Weight_CL_nlsfun_F, color = "blue", size = 1.25) + 
+  stat_function(fun = Weight_CL_nlsfun_M, color = "red", size = 1.25) + 
+  # scale_x_log10(breaks=c(5,10,20,30,40,50)) +
+  # scale_y_log10(breaks=c(0.1,1,10,25,50))+
   theme_bw()
+CL_Weight_nls
 ggsave('cray_Weight0_CL_nls.png',CL_Weight_nls)
 
 #################Estimate relationship between CL and chela length
 #With log-log model
-ChelaL_CL_lm <-lm(log(Chelae_L)~log(CL), data=craydat[!is.na(craydat$Chelae_L),])
+ChelaL_CL_lm <-lm(log(Chelae_L)~log(CL)*Sex, data=craydat[!is.na(craydat$Chelae_L),])
 summary(ChelaL_CL_lm)
-plot(ChelaL_CL_lm)
+#plot(ChelaL_CL_lm)
 
 craydat[!is.na(craydat$Chelae_L),'CL_ChelaL_lm_pred'] <- predict(ChelaL_CL_lm) 
 craydat[!is.na(craydat$Chelae_L),'CL_ChelaL_lm_res'] <- residuals(ChelaL_CL_lm)
 qplot(residuals(ChelaL_CL_lm))
 
+
 chelaratio_CL_trib_loglog <- ggplot(craydat[!is.na(craydat$Chelae_L)& is.na(craydat$Miss_App),], aes(x = CL, y = Chelae_L)) +
   geom_jitter(size=3, alpha=1/2,aes(color=factor(River_Tributary))) +
   #geom_text(aes(label = Site, size = 3), check_overlap = TRUE) +
   #geom_text(aes(label = Cray_ID, size =3), hjust = 1.5, color = "red",check_overlap = TRUE) +
-  geom_line(aes(y=CL_ChelaL_lm_res), color = "#225ea8", size = 1.25) + 
+  geom_line(aes(y=exp(CL_ChelaL_lm_pred)), color = "#225ea8", size = 1.25) + 
   scale_x_log10(breaks=c(5,10,25,50), labels=c(5,10,25,50))+
   scale_y_log10(breaks=c(5,10,25,50))+
   theme_bw()
@@ -385,21 +408,51 @@ summary(ChelaL_CL_nls)
 plot(ChelaL_CL_nls)
 mean(abs(craydat[!is.na(craydat$Chelae_L),'Chelae_L'] - predict(ChelaL_CL_nls)))
 
-ChelaL_CL_nlsfun <- function(CL) {log10(0.1733*CL^1.4653)}
-craydat[!is.na(craydat$Chelae_L),'CL_ChelaL_nls_pred'] <- predict(ChelaL_CL_nls) 
-craydat[!is.na(craydat$Chelae_L),'CL_ChelaL_nls_res'] <- residuals(ChelaL_CL_nls)
-qplot(residuals(ChelaL_CL_nls))
+ChelaL_CL_nlsfun <- function(CL) {0.1733*CL^1.4653}
+# craydat[!is.na(craydat$Chelae_L),'CL_ChelaL_nls_pred'] <- predict(ChelaL_CL_nls)
+# craydat[!is.na(craydat$Chelae_L),'CL_ChelaL_nls_res'] <- residuals(ChelaL_CL_nls)
+# qplot(residuals(ChelaL_CL_nls))
 
-chelaratio_CL_trib_nls <- ggplot(craydat, aes(x = CL, y = Chelae_L)) +
+
+#With Non-linear least-square model separated between males and females
+ChelaL_CL_nls_F <- nls(Chelae_L~b*CL^c, data=craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'F',], start=c(b=0.2,c=1.5), trace=T)
+summary(ChelaL_CL_nls_F)
+ChelaL_CL_nls_M <- nls(Chelae_L~b*CL^c, data=craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'M',], start=c(b=0.2,c=1.5), trace=T)
+summary(ChelaL_CL_nls_M)
+mean(c(abs(craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'M','Chelae_L'] - predict(ChelaL_CL_nls_M)),
+     abs(craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'F','Chelae_L'] - predict(ChelaL_CL_nls_F))))
+
+ChelaL_CL_nlsfun_F <- function(CL) {
+  data.frame(summary(ChelaL_CL_nls_F)$coefficients)['b', 'Estimate']*CL^data.frame(summary(ChelaL_CL_nls_F)$coefficients)['c', 'Estimate']
+}
+ChelaL_CL_nlsfun_M <- function(CL) {
+  data.frame(summary(ChelaL_CL_nls_M)$coefficients)['b', 'Estimate']*CL^data.frame(summary(ChelaL_CL_nls_M)$coefficients)['c', 'Estimate']
+}
+
+craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'F','CL_ChelaL_nls_pred'] <- predict(ChelaL_CL_nls_F) 
+craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'F','CL_ChelaL_nls_res'] <- residuals(ChelaL_CL_nls_F)
+craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'M','CL_ChelaL_nls_pred'] <- predict(ChelaL_CL_nls_M) 
+craydat[!is.na(craydat$Chelae_L) & craydat$Sex == 'M','CL_ChelaL_nls_res'] <- residuals(ChelaL_CL_nls_M)
+qplot(residuals(ChelaL_CL_nls_F))
+qplot(residuals(ChelaL_CL_nls_M))
+
+
+chelaratio_CL_trib_nls <- ggplot(craydat[craydat$River_Tributary %in% c('Lower mainstem', 'Upper mainstem', 'North Fork', 'South Fork'),], aes(x = CL, y = Chelae_L)) +
   geom_jitter(size=3, alpha=1/2,aes(color=factor(River_Tributary))) +
+  scale_color_discrete(name = 'River/Tributary') + 
   #geom_text(aes(label = Site, size = 3), check_overlap = TRUE) +
   #geom_text(aes(label = Cray_ID, size =3), hjust = 1.5, color = "red",check_overlap = TRUE) +
-  stat_function(fun = ChelaL_CL_nlsfun, color = "#225ea8", size = 1.25) + 
-  scale_x_log10(breaks=c(5,10,25,50), labels=c(5,10,25,50))+
-  scale_y_log10(breaks=c(5,10,25,50))+
-  theme_bw()
+  stat_function(fun = ChelaL_CL_nlsfun, color = "black", size = 1.25) + 
+  stat_function(fun = ChelaL_CL_nlsfun_F, color = "blue", size = 1.25) + 
+  stat_function(fun = ChelaL_CL_nlsfun_M, color = "red", size = 1.25) + 
+  #geom_smooth(span=0.9) +
+  scale_x_continuous(name = 'Carapace length (mm)', breaks=seq(0,50,10))+
+  scale_y_continuous(name = 'Chela length (mm)', breaks=seq(0,50,10))+
+  theme_bw() +
+  theme(panel.grid.minor = element_blank()) +
+  facet_grid(~Sex)
 chelaratio_CL_trib_nls
-ggsave('cray_chelaratio0CL_nls_trib.png', plot=chelaratio_CL_trib_nls)
+ggsave('cray_chelaratio0CL_nls_trib.png', plot=chelaratio_CL_trib_nls, width = 8, height = 6)
 
 #######
 craydatOR <- craydat[craydat$Species=='OR' & (craydat$Method=='Kick' | craydat$Method=='Snorkel/Dipnet' | craydat$Method == 'Dipnet'),]
@@ -462,8 +515,8 @@ craydat_stat <- ddply(craydatOR, .(Site), function(x) {
 craydat_stat_weight <- ddply(craydatOR[is.na(craydatOR$Miss_App),], .(Site), function(x) {
   Weight_mean <- mean(x$Weight,na.rm=T)
   Weight_SE <- sd(x$Weight,na.rm=T)/sqrt(nrow(x[!is.na(x$Weight),]))
-  Weight_res_mean <-  mean(x$CL_weight_lm_res, na.rm=T)
-  Weight_res_se <- sd(x$CL_weight_lm_res,na.rm=T)/sqrt(nrow(x[!is.na(x$CL_weight_lm_res),]))
+  Weight_res_mean <-  mean(x$CL_Weight_nls_res, na.rm=T)
+  Weight_res_se <- sd(x$CL_Weight_nls_res,na.rm=T)/sqrt(nrow(x[!is.na(x$CL_Weight_nls_res),]))
   data.frame(Weight_mean, Weight_SE, Weight_res_mean, Weight_res_se)
 }
 )
@@ -674,6 +727,11 @@ dep <- ggplot(habdatdistinfo, aes(x = Spread_dist, y = depthmean, color = River_
 vel <- ggplot(habdatdistinfo, aes(x = Spread_dist, y = velmean, color = River_Tributary)) + geom_point(size = 2)+ geom_smooth(method='lm')
 grid.arrange(tem,dep, vel, ncol = 3)
 
+ggplot(habdatdistinfo[habdatdistinfo$Site %in% sel$Site], aes(x = Spread_dist, y = velmean, color = River_Tributary)) + geom_point(size = 2)+ geom_smooth(method='lm') +
+  scale_y_continuous(limits=c(0,50))
+ddply(habdatdistinfo, .(River_Tributary), summarize, mean(velmean, na.rm=T))
+
+
 #Compare measured temp to modeled temp
 tempmean_Julytempmod<-ggplot(habdatdistinfo, aes(x = X2016.07.01, y = tempmean, color = River_Tributary)) + geom_point(size = 2) + 
   theme_bw() + coord_fixed() + geom_smooth(method='lm') + scale_y_continuous(limits=c(13,27)) +
@@ -694,10 +752,24 @@ ggplot(habdatdistinfo, aes(x = Q0001E_MA, y = velmean, color = River_Tributary))
 ggplot(habdatdistinfo, aes(x = Q0001E_8, y = velmean, color = River_Tributary)) + geom_point(size = 2)
 
 #Check whether there is bias in mesohabitat sampled across invasion gradient
-craydat_meso <-ddply(craydat, .(Site, Meso_type, Spread_dist), function(x) nrow(x))
-craydat_mesoplot <-ggplot(craydat_meso, aes(x=factor(Site),y=V1)) + geom_bar(aes(fill=Meso_type),stat='identity') + theme_bw() +
-  scale_x_discrete(name='Count')
-ggsave('site_trophiclevel0_mesohabitatspread.png', plot=craydat_mesoplot, width = 10, height = 12, units='in')
+sel <- craydat_stat[craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean) &  !is.na(craydat_stat$trophiclevel_mean) &
+                    craydat_stat$Site != '107',]
+setDT(craydatOR)[River_Tributary %in% c('Lower mainstem', 'Upper mainstem'), River_Tributary := 'Mainstem']
+craydat_meso <- setDT(craydatOR)[Site %in% sel$Site, list(N = length(CL),
+                                        meanCL = mean(CL, na.rm = T)), .(Site, Meso_type, Spread_dist, River_Tributary)]
+craydatOR$Site <- factor(craydatOR$Site,levels = unique(craydatOR$Site[order(craydatOR$Spread_dist)]))
+craydat_mesoplot <- ggplot(craydatOR[craydatOR$Site %in% sel$Site,], aes(x=Site,y=CL)) + 
+  geom_boxplot(aes(fill=Meso_type), lwd = 0.05, position = position_dodge2(preserve='single'), alpha=0.3) +
+  theme_classic() +
+  scale_x_discrete(name='Site ID') +
+  scale_y_continuous(name = 'Carapace Length (mm)') + 
+  scale_fill_brewer(name = 'Mesohabitat type', palette = "Dark2", labels = c('Pool', 'Pool-edge', 'Riffle', 'Riffle-Run', 'Run', 'Run-Pool')) + 
+  facet_wrap(~River_Tributary, ncol=1)+ 
+  geom_text(data = craydat_meso, aes(label = N, y = meanCL, color= Meso_type), size = 4, position = position_dodge(width=0.8)) +
+  scale_colour_brewer(name = 'Mesohabitat type', palette = "Dark2", labels = c('Pool', 'Pool-edge', 'Riffle', 'Riffle-Run', 'Run', 'Run-Pool')) + 
+  theme(text = element_text(size=14))
+craydat_mesoplot
+ggsave('site_CL0_mesohabitat.png', plot=craydat_mesoplot, width = 8, height = 6, units='in')
 
 ############################################################################################
 ################################################# CRAYFISH-LEVEL DATA
@@ -902,8 +974,9 @@ CL_discharge_trib <- ggplot(craydatOR, aes(x = (Q0001E_MA), y = CL)) +
 ggsave('cray_CL94_discharge_trib.png', plot=CL_discharge_trib)
 
 #Mesohabitat
-CL_Meso_type_trib <- ggplot(craydatOR, aes(x = (Meso_type), y = CL)) +
-  geom_boxplot(size=1, alpha=1/2)
+CL_Meso_type_trib <- ggplot(craydatOR[craydatOR$Site %in% sel$Site,], aes(x = (Meso_type), y = CL)) +
+  geom_boxplot(size=1, alpha=1/2) + 
+  scale_x_discrete(name = 'Mesohabitat type')
 CL_Meso_type_trib
 ggsave('cray_CL95_Meso_type_trib.png', plot=CL_Meso_type_trib)
 
@@ -954,7 +1027,7 @@ ggsave('cray_Weight0_CL_loglog.png',CL_Weight_loglog)
 
 
 #DISTANCE FROM INVASION AND WEIGHT 
-spreadist_weight <- ggplot(craydat, aes(x = Spread_dist, y = Weight_CL_lm_res, group=factor(Site))) +
+spreadist_weight <- ggplot(craydat, aes(x = Spread_dist, y = CL_Weight_nls_res, group=factor(Site))) +
   geom_point(aes(color=factor(River_Tributary)), size=4, alpha=1/2)+ 
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2))+
   geom_smooth(aes(group=River_Tributary, color=River_Tributary), method='lm') +
@@ -962,14 +1035,14 @@ spreadist_weight <- ggplot(craydat, aes(x = Spread_dist, y = Weight_CL_lm_res, g
 spreadist_weight
 ggsave('cray_weight1_spreadist.png', plot=spreadist_weight, width = 20, height = 12, units='in')
 
-meaninvyr_weight <- ggplot(craydat, aes(x = meaninvyr, y = Weight_CL_lm_res)) +
+meaninvyr_weight <- ggplot(craydat, aes(x = meaninvyr, y = CL_Weight_nls_res)) +
   geom_point(, size=4, alpha=1/2) +
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2)) +
   geom_smooth(method='lm')
 meaninvyr_weight
 ggsave('cray_weight2_meaninvyr.png', plot=meaninvyr_weight, width = 10, height = 10, units='in')
 
-meaninvyr_weight_trib2 <-ggplot(craydat, aes(x = meaninvyr, y = Weight_CL_lm_res)) +
+meaninvyr_weight_trib2 <-ggplot(craydat, aes(x = meaninvyr, y = CL_Weight_nls_res)) +
   geom_point(aes(color=factor(River_Tributary)), size=4, alpha=1/2) +
   #geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2))+ 
   geom_smooth(aes(group=River_Tributary, color=River_Tributary), method='glm')+
@@ -978,34 +1051,34 @@ meaninvyr_weight_trib2 <-ggplot(craydat, aes(x = meaninvyr, y = Weight_CL_lm_res
 meaninvyr_weight_trib2
 ggsave('cray_weight3_meaninvyr_trib2.png', plot=meaninvyr_weight_trib2, width = 10, height = 10, units='in')
 
-interval_weight_trib <- ggplot(craydat, aes(x =interval, y = Weight_CL_lm_res, group=factor(Site))) +
+interval_weight_trib <- ggplot(craydat, aes(x =interval, y = CL_Weight_nls_res, group=factor(Site))) +
   geom_point(aes(color=factor(River_Tributary)), size=4, alpha=1/4) + 
   scale_x_sqrt(breaks=c(0,1000,10000,25000,50000,100000,250000,400000))+ 
   geom_smooth(aes(group=River_Tributary, color=River_Tributary), method='glm')
 ggsave('cray_weight4_interval_trib.png', plot=interval_weight_trib, width = 8, height = 6, units='in')
 
 #PRODUCTIVITY AND WEIGHT
-ADFW_weight_trib <- ggplot(craydat[!is.na(craydat$AFDWmean),], aes(x = AFDWmean, y = Weight_CL_lm_res)) +
+ADFW_weight_trib <- ggplot(craydat[!is.na(craydat$AFDWmean),], aes(x = AFDWmean, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2)) + 
   scale_x_sqrt() + facet_wrap(~River_Tributary,drop = TRUE, scales='free_y') + geom_smooth(method='lm')
 ggsave('cray_weight6_ADFW_trib.png', plot=ADFW_weight_trib, width = 8, height = 6, units='in')
 
-pp_weight_trib <- ggplot(craydat, aes(x = greenmean+cyanomean+diatommean, y = Weight_CL_lm_res)) +
+pp_weight_trib <- ggplot(craydat, aes(x = greenmean+cyanomean+diatommean, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2)) + 
   scale_x_sqrt() + facet_wrap(~River_Tributary, scales='free') + geom_smooth(method='lm')
 ggsave('cray_weight8_pp_trib.png', plot=pp_weight_trib, width = 20, height = 12, units='in')
 
 #COMPETITION AND WEIGHT
-CPUE_weight_trib <- ggplot(craydat, aes(x = Kick_mean, y = Weight_CL_lm_res)) +
+CPUE_weight_trib <- ggplot(craydat, aes(x = Kick_mean, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/4)+ 
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2)) + 
   scale_x_sqrt() + geom_smooth(method='lm')
 #CPUE_weight_trib
 ggsave('cray_weight9_CPUE_trib.png', plot=CPUE_weight_trib, width = 10, height = 10, units='in')
 
-CPUE_weight_trib2 <- ggplot(craydat, aes(x = Kick_mean, y = Weight_CL_lm_res)) +
+CPUE_weight_trib2 <- ggplot(craydat, aes(x = Kick_mean, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/4)+ 
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2)) + 
   scale_x_sqrt() + geom_smooth(method='lm') + facet_wrap(~River_Tributary, scales='free')
@@ -1014,12 +1087,12 @@ ggsave('cray_weight9_CPUE_trib2.png', plot=CPUE_weight_trib2, width = 10, height
 
 #HABITAT AND WEIGHT
 #Temperature
-tempfield_weight_trib <- ggplot(craydat, aes(x = tempmean, y = Weight_CL_lm_res)) +
+tempfield_weight_trib <- ggplot(craydat, aes(x = tempmean, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+
   geom_smooth(method='lm', aes(color=River_Tributary))
 ggsave('cray_weight90_tempfield_trib.png', plot=tempfield_weight_trib)
 
-tempmod_weight_trib <- ggplot(craydat, aes(x = degdays, y = Weight_CL_lm_res)) +
+tempmod_weight_trib <- ggplot(craydat, aes(x = degdays, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_text(data=craydat[!duplicated(craydat$Site),], aes(label = Site, size = 2)) +
   geom_smooth()
@@ -1032,13 +1105,13 @@ discharge_weight_trib <- ggplot(craydatOR, aes(x = Q0001E_MA, y = Weight)) +
 ggsave('cray_weight93_discharge_trib.png', plot=discharge_weight_trib)
 
 #Mesohabitat
-weight_Meso_type_trib <- ggplot(craydat, aes(x = (Meso_type), y = Weight_CL_lm_res)) +
+weight_Meso_type_trib <- ggplot(craydat, aes(x = (Meso_type), y = CL_Weight_nls_res)) +
   geom_boxplot(size=1, alpha=1/2)
 weight_Meso_type_trib
 ggsave('cray_Weight95_Meso_type_trib.png', plot=weight_Meso_type_trib)
 
 #Method
-weight_method_trib <- ggplot(craydat, aes(x = Method, y = Weight_CL_lm_res)) +
+weight_method_trib <- ggplot(craydat, aes(x = Method, y = CL_Weight_nls_res)) +
   geom_boxplot(size=1, alpha=1/2) +
   geom_hline(yintercept=0, color='red')
 weight_method_trib
@@ -1046,38 +1119,38 @@ ggsave('cray_Weight97_method_trib.png', plot=weight_method_trib)
 
 
 #OTHER INTRINSIC PROPERTIES
-CL_weight_trib <- ggplot(craydat, aes(x = CL, y = Weight_CL_lm_res)) +
+CL_weight_trib <- ggplot(craydat, aes(x = CL, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=2, alpha=1/2)+ 
   geom_text(aes(label = Site, size = 1.5), alpha=1/3)+
   geom_smooth(method='lm') + facet_wrap(~Site)
 CL_weight_trib
 ggsave('cray_weight94_CL_trib.png', plot=CL_weight_trib, width = 10, height = 10, units='in')
 
-RNADNA_weight_trib <- ggplot(craydat, aes(x = RNADNAratio, y = Weight_CL_lm_res)) +
+RNADNA_weight_trib <- ggplot(craydat, aes(x = RNADNAratio, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=2, alpha=1/2)+ 
   geom_text(aes(label = Site, size = 1.5), alpha=1/3)+
   geom_smooth(method='lm')
 ggsave('cray_weight94_RNADNA_trib.png', plot=RNADNA_weight_trib, width = 10, height = 10, units='in')
 
-RNADNA_weight_trib2 <- ggplot(craydat, aes(x = RNADNAratio, y = Weight_CL_lm_res)) +
+RNADNA_weight_trib2 <- ggplot(craydat, aes(x = RNADNAratio, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=3, alpha=1/2)+ 
   facet_wrap(~Site, scales='free_y') +
   geom_smooth(method='lm')
 ggsave('cray_weight94_RNADNA_trib2.png', plot=RNADNA_weight_trib2, width = 20, height = 12, units='in')
 
-trophiclevel_weight_trib <- ggplot(craydat, aes(x = trophiclevel, y = Weight_CL_lm_res)) +
+trophiclevel_weight_trib <- ggplot(craydat, aes(x = trophiclevel, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=3, alpha=1/2)+ 
   geom_text(aes(label = Site, size = 1.5), alpha=1/3)+
   geom_smooth(method='lm')
 ggsave('cray_weight95_trophiclevel_trib.png', plot=trophiclevel_weight_trib, width = 20, height = 12, units='in')
 
-trophiclevel_weight_trib2 <- ggplot(craydat, aes(x = trophiclevel, y = Weight_CL_lm_res)) +
+trophiclevel_weight_trib2 <- ggplot(craydat, aes(x = trophiclevel, y = CL_Weight_nls_res)) +
   geom_point(aes(color=River_Tributary), size=3, alpha=1/2)+ 
   facet_wrap(~Site, scales='free_y') +
   geom_smooth(method='lm')
 ggsave('cray_weight95_trophiclevel_trib2.png', plot=trophiclevel_weight_trib2, width = 20, height = 12, units='in')
 
-weight_sex_trib <- ggplot(craydat, aes(x = Sex, y = Weight_CL_lm_res)) +
+weight_sex_trib <- ggplot(craydat, aes(x = Sex, y = CL_Weight_nls_res)) +
   geom_boxplot(size=1, alpha=1/2)
 #geom_text(aes(label = Site, size = 2), alpha=1/3) 
 weight_sex_trib
@@ -1191,6 +1264,12 @@ chelaratio_discharge_trib <- ggplot(craydat, aes(x = (Q0001E_MA), y = CL_ChelaL_
   geom_smooth(span=1)
 chelaratio_discharge_trib
 ggsave('cray_chelaratio93_discharge_trib.png', plot=chelaratio_discharge_trib, width=20, height=12, units='in')
+
+#Mesohabitat
+chelaratio_Meso_type_trib <- ggplot(craydat, aes(x = (Meso_type), y = CL_ChelaL_nls_res)) +
+  geom_boxplot(size=1, alpha=1/2)
+chelaratio_Meso_type_trib
+ggsave('cray_chelaratio930_Meso_type_trib.png', plot=chelaratio_Meso_type_trib)
 
 #Mesohabitat
 chelaratio_Meso_type_trib <- ggplot(craydat, aes(x = (Meso_type), y = CL_ChelaL_nls_res)) +
@@ -1603,14 +1682,14 @@ RNADNAratio_CL_trib2 <- ggplot(craydat, aes(x = CL, y = RNADNAratio)) +
 RNADNAratio_CL_trib2
 ggsave('cray_RNADNAratio994_CL_trib2.png', plot=RNADNAratio_CL_trib2, width=20, height=12, units='in')
 
-RNADNAratio_Weight_trib <- ggplot(craydat, aes(x = Weight_CL_lm_res, y = RNADNAratio)) +
+RNADNAratio_Weight_trib <- ggplot(craydat, aes(x = CL_Weight_nls_res, y = RNADNAratio)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_text(aes(label = Site, size = 2), alpha=1/3) +
   geom_smooth(method='lm')
 RNADNAratio_Weight_trib
 ggsave('cray_RNADNAratio994_Weight_trib.png', plot=RNADNAratio_Weight_trib, width=20, height=12, units='in')
 
-RNADNAratio_Weight_trib2 <- ggplot(craydat, aes(x = Weight_CL_lm_res, y = RNADNAratio)) +
+RNADNAratio_Weight_trib2 <- ggplot(craydat, aes(x = CL_Weight_nls_res, y = RNADNAratio)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_text(aes(label = Site, size = 2), alpha=1/3) +
   geom_smooth(method='lm') + 
@@ -1713,7 +1792,7 @@ ggsave('site_sexratio4_CPUE_trib.png', plot=sexratio_CPUE_trib)
 #DISTANCE FROM INVASION AND MISSING APPENDAGES
 Miss_App_tot_spreadist_trib <- ggplot(craydat_stat[craydat_stat$ncray > 10,], aes(x = Spread_dist, y = Miss_App_tot)) +
   geom_point(aes(color=factor(River_Tributary)), size=6, alpha=1/2)+ 
-  geom_text(data=craydat_stat[!duplicated(craydat_stat$Site),], aes(label = Site, size = 2), alpha=1/3)  +
+  geom_text(data=craydat_stat[craydat_stat$ncray > 10 & !duplicated(craydat_stat$Site),], aes(label = Site, size = 2), alpha=1/3)  +
   geom_smooth(method='glm') + 
   theme_bw()
 ggsave('site_Miss_App_tot1_spreadist_trib.png', plot=Miss_App_tot_spreadist_trib)
@@ -1735,7 +1814,7 @@ ggsave('site_Miss_App_tot3_interval_trib.png', plot=Miss_App_tot_interval_trib)
 #COMPETITION AND MISSING APPENDAGES
 Miss_App_tot_CPUE_trib <- ggplot(craydat_stat[craydat_stat$ncray > 10,], aes(x = sqrt(Kick_mean), y = Miss_App_tot)) +
   geom_point(aes(color=factor(River_Tributary)), size=6, alpha=1/2)+ 
-  geom_text(data=craydat_stat[!duplicated(craydat_stat$Site),], aes(label = Site, size = 2), alpha=1/3) +
+  geom_text(data=craydat_stat[craydat_stat$ncray > 10 & !duplicated(craydat_stat$Site),], aes(label = Site, size = 2), alpha=1/3) +
   geom_smooth(method='glm')+ 
   theme_bw()
 ggsave('site_Miss_App_tot4_CPUE_trib.png', plot=Miss_App_tot_CPUE_trib)
@@ -1944,7 +2023,7 @@ chelaratio_spreadist_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x
   #geom_smooth(aes(group=River_Tributary), method='glm', alpha=1/3) + 
   theme_bw()
 chelaratio_spreadist_trib 
-ggsave('site_chelaratio1_spreadist_trib.png', plot=chelaratio_spreadist_trib)
+ggsave('site_chelaratio1_spreadist_trib_20181221.png', plot=chelaratio_spreadist_trib)
 
 chelaratio_meaninvyr_trib <-ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x = meaninvyr, y =Chelae_res_mean)) +
   geom_point(aes(color=factor(River_Tributary)), size=6, alpha=1/2) +
@@ -1952,14 +2031,14 @@ chelaratio_meaninvyr_trib <-ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   #geom_smooth(aes(group=River_Tributary), method='glm', alpha=1/3)+ 
   theme_bw()
-ggsave('site_chelaratio2_meaninvyr_trib.png', plot=chelaratio_meaninvyr_trib)
+ggsave('site_chelaratio2_meaninvyr_trib_20181221.png', plot=chelaratio_meaninvyr_trib)
 
 chelaratio_interval_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x =interval, y =Chelae_res_mean, group=factor(Site))) +
   geom_point(aes(color=factor(River_Tributary)), size=6, alpha=1/2) + 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   scale_x_sqrt(breaks=c(0,1000,10000,25000,50000,100000,250000,400000))+ 
   theme_bw()
-ggsave('site_chelaratio3_interval_trib.png', plot=chelaratio_interval_trib)
+ggsave('site_chelaratio3_interval_trib_20181221.png', plot=chelaratio_interval_trib)
 
 #PRODUCTIVITY AND CHELA LENGTH/CARAPACE LENGTH RATIO
 chelaratio_AFDW_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x = AFDWmean, y =Chelae_res_mean, group=factor(Site))) +
@@ -1967,14 +2046,14 @@ chelaratio_AFDW_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x = AF
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2)) + 
   scale_x_sqrt()
-ggsave('site_chelaratio4_AFDW_trib.png', plot=chelaratio_AFDW_trib)
+ggsave('site_chelaratio4_AFDW_trib_20181221.png', plot=chelaratio_AFDW_trib)
 
 chelaratio_pp_trib <- ggplot(craydat_stat[craydat_stat$ncray >=10,], aes(x = greenmean+cyanomean+diatommean, y =Chelae_res_mean)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2)) + 
   scale_x_sqrt()
-ggsave('site_chelaratio5_pp_trib.png', plot=chelaratio_pp_trib)
+ggsave('site_chelaratio5_pp_trib_20181221.png', plot=chelaratio_pp_trib)
 
 #COMPETITION AND CHELA LENGTH/CARAPACE LENGTH RATIO
 chelaratio_CPUE_trib <- ggplot(craydat_stat[craydat_stat$ncray >10], aes(x = Kick_mean, y =Chelae_res_mean)) +
@@ -1983,7 +2062,7 @@ chelaratio_CPUE_trib <- ggplot(craydat_stat[craydat_stat$ncray >10], aes(x = Kic
   geom_text(aes(label = Site, size = 2)) + 
   scale_x_sqrt() +
   geom_smooth(method='glm')
-ggsave('site_chelaratio6_CPUE_trib.png', plot=chelaratio_CPUE_trib)
+ggsave('site_chelaratio6_CPUE_trib_20181221.png', plot=chelaratio_CPUE_trib)
 
 #HABITAT AND CHELA LENGTH/CARAPACE LENGTH RATIO
 #Temperature
@@ -1991,33 +2070,33 @@ chelaratio_tempfield_trib <- ggplot(craydat_stat[craydat_stat$ncray >=10], aes(x
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2))
-ggsave('site_chelaratio7_tempfield_trib.png', plot=chelaratio_tempfield_trib)
+ggsave('site_chelaratio7_tempfield_trib_20181221.png', plot=chelaratio_tempfield_trib)
 
 chelaratio_tempmod_trib <- ggplot(craydat_stat[craydat_stat$ncray >=10], aes(x = degdays, y =Chelae_res_mean)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2))
-ggsave('site_chelaratio8_tempmod_trib.png', plot=chelaratio_tempmod_trib)
+ggsave('site_chelaratio8_tempmod_trib_20181221.png', plot=chelaratio_tempmod_trib)
 
 #Discharge
 chelaratio_discharge_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x = (Q0001E_MA), y =Chelae_res_mean)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2))
-ggsave('site_chelaratio9_discharge_trib.png', plot=chelaratio_discharge_trib)
+ggsave('site_chelaratio9_discharge_trib_20181221.png', plot=chelaratio_discharge_trib)
 
 #OTHER INTRINSIC PROPERTIES
 chelaratio_RNADNA_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x = RNADNAratio_mean, y =Chelae_res_mean)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2), alpha=1/3)
-ggsave('site_chelaratio90_RNADNA_trib.png', plot=chelaratio_RNADNA_trib)
+ggsave('site_chelaratio90_RNADNA_trib_20181221.png', plot=chelaratio_RNADNA_trib)
 
 chelaratio_trophiclevel_trib <- ggplot(craydat_stat[craydat_stat$ncray >10,], aes(x = trophiclevel_mean, y =Chelae_res_mean)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_errorbar(aes(ymin=Chelae_res_mean-1.96*Chelae_res_se, ymax=Chelae_res_mean+1.96*Chelae_res_se), alpha=1/3) +
   geom_text(aes(label = Site, size = 2), alpha=1/3) 
-ggsave('site_chelaratio91_trophiclevel_trib.png', plot=chelaratio_trophiclevel_trib)
+ggsave('site_chelaratio91_trophiclevel_trib_20181221.png', plot=chelaratio_trophiclevel_trib)
 
 ############## TROPHIC LEVEL ##########
 #DISTANCE FROM INVASION AND LENGTH
@@ -2452,13 +2531,13 @@ ggplot(craydatsub,
 ############################################################################################
 ##### WEIGHT ###########
 #Using samples from all methods but only from those sites with AFDW - with invasion year
-Weight_meaninvall_cray_lme <- lmer(Weight_CL_lm_res ~sqrt(meaninvyr) + degdays + log(AFDWmean) + sqrt(Kick_mean) +
+Weight_meaninvall_cray_lme <- lmer(CL_Weight_nls_res ~sqrt(meaninvyr) + degdays + log(AFDWmean) + sqrt(Kick_mean) +
                                  sqrt(greenmean) + sqrt(cyanomean) + sqrt(diatommean) + 
                                  Method + (1|River_Tributary) + (1|Meso_type), 
                                data=craydat[!is.na(craydat$AFDWmean),], REML=F)
 summary(Weight_meaninvall_cray_lme)
 craydat[!is.na(craydat$AFDWmean),'Weight_meaninvall_pred'] <- predict(Weight_meaninvall_cray_lme, craydat[!is.na(craydat$AFDWmean),],allow.new.levels=T)
-ggplot(craydat[!is.na(craydat$AFDWmean),], aes(x=Weight_meaninvall_pred,y=Weight_CL_lm_res, color=River_Tributary,shape=Method))+
+ggplot(craydat[!is.na(craydat$AFDWmean),], aes(x=Weight_meaninvall_pred,y=CL_Weight_nls_res, color=River_Tributary,shape=Method))+
   geom_point()+geom_abline(slope=1, intercept=0)
 drop1(Weight_meaninvall_cray_lme,test="Chisq")
 confint(Weight_meaninvall_cray_lme)
@@ -2468,11 +2547,11 @@ qqline(residuals(Weight_meaninvall_cray_lme))
 
 
 #Using samples from all methods for all sites with Kick CPUE
-Weight_meaninvall_cray_lme <- lmer(Weight_CL_lm_res ~sqrt(meaninvyr) + (1|River_Tributary), 
+Weight_meaninvall_cray_lme <- lmer(CL_Weight_nls_res ~sqrt(meaninvyr) + (1|River_Tributary), 
                                    data=craydat, REML=F)
 summary(Weight_meaninvall_cray_lme)
 craydat[,'Weight_meaninvall_pred'] <- predict(Weight_meaninvall_cray_lme, craydat,allow.new.levels=T)
-ggplot(craydat, aes(x=Weight_meaninvall_pred,y=Weight_CL_lm_res, color=River_Tributary,shape=Method))+
+ggplot(craydat, aes(x=Weight_meaninvall_pred,y=CL_Weight_nls_res, color=River_Tributary,shape=Method))+
   geom_point()+geom_abline(slope=1, intercept=0)
 drop1(Weight_meaninvall_cray_lme,test="Chisq")
 confint(Weight_meaninvall_cray_lme)
@@ -2483,27 +2562,27 @@ qqline(residuals(Weight_meaninvall_cray_lme))
 
 #Using samples from all methods for all sites with Kick CPUE
 qplot(sqrt(craydat$meaninvyr))
-qplot(craydat$Weight_CL_lm_res)
-Weight_meaninvall_cray_lm <- lm(Weight_CL_lm_res ~ sqrt(meaninvyr), data=craydat)
+qplot(craydat$CL_Weight_nls_res)
+Weight_meaninvall_cray_lm <- lm(CL_Weight_nls_res ~ sqrt(meaninvyr), data=craydat)
 summary(Weight_meaninvall_cray_lm)
 craydat[,'Weight_meaninvall_pred'] <- predict(Weight_meaninvall_cray_lm, craydat,allow.new.levels=T)
-ggplot(craydat, aes(x=Weight_meaninvall_pred,y=Weight_CL_lm_res, color=River_Tributary,shape=Method))+
+ggplot(craydat, aes(x=Weight_meaninvall_pred,y=CL_Weight_nls_res, color=River_Tributary,shape=Method))+
   geom_point()+geom_abline(slope=1, intercept=0)
 drop1(Weight_meaninvall_cray_lm,test="Chisq")
 
-Weight_meaninvall_cray_lm <- lm(Weight_CL_lm_res ~ sqrt(meaninvyr)+sqrt(Kick_mean), data=craydat)
+Weight_meaninvall_cray_lm <- lm(CL_Weight_nls_res ~ sqrt(meaninvyr)+sqrt(Kick_mean), data=craydat)
 summary(Weight_meaninvall_cray_lm)
 craydat[,'Weight_meaninvall_pred'] <- predict(Weight_meaninvall_cray_lm, craydat,allow.new.levels=T)
-ggplot(craydat, aes(x=Weight_meaninvall_pred,y=Weight_CL_lm_res, color=River_Tributary,shape=Method))+
+ggplot(craydat, aes(x=Weight_meaninvall_pred,y=CL_Weight_nls_res, color=River_Tributary,shape=Method))+
   geom_point()+geom_abline(slope=1, intercept=0)
 drop1(Weight_meaninvall_cray_lm,test="Chisq")
 
 #Using spreading distance rather than invasion year
-Weight_spreadall_cray_lm <- lm(Weight_CL_lm_res ~ log(Spread_dist) + sqrt(Kick_mean) +
+Weight_spreadall_cray_lm <- lm(CL_Weight_nls_res ~ log(Spread_dist) + sqrt(Kick_mean) +
                                      sqrt(diatommean),data=craydat[!is.na(craydat$Kick_mean),])
 summary(Weight_spreadall_cray_lm)
 craydat[!is.na(craydat$Kick_mean),'Weight_spreadall_pred'] <- predict(Weight_spreadall_cray_lme, craydat,allow.new.levels=T)
-ggplot(craydat, aes(x=Weight_spreadall_pred,y=Weight_CL_lm_res, color=River_Tributary,shape=Method))+
+ggplot(craydat, aes(x=Weight_spreadall_pred,y=CL_Weight_nls_res, color=River_Tributary,shape=Method))+
   geom_point()+geom_abline(slope=1, intercept=0)
 drop1(Weight_spreadall_cray_lme,test="Chisq")
 
@@ -2967,7 +3046,7 @@ ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' |
   geom_ribbon(aes(ymin = (gam_chela_sp-1.96*gam_chela_sp_se), ymax = (gam_chela_sp+1.96*gam_chela_sp_se), fill=River_Tributary), alpha=0.3)+
   geom_point(aes(color=River_Tributary), size=4)+ 
   geom_line(aes(y=(gam_chela_sp)), size=1.1) +
-  scale_y_continuous(name='Carapace length (mm)', breaks=c(10,15,20,25,30)) +
+  scale_y_continuous(name='Chela length residuals', breaks=c(10,15,20,25,30)) +
   scale_x_continuous(name='Distance from invasion source', expand=c(0,0)) +
   #geom_text(aes(label=Site)) +
   scale_fill_discrete(name='Tributary (95% CI)') + 
@@ -2984,31 +3063,6 @@ AIC(mgcv_chela_yr)
 par(mfrow=c(2,2))
 gam.check(mgcv_chela_yr)
 par(mfrow=c(1,1))
-
-#LOESS smoother for meaninvyr
-# gam_chela_yr <-  gam(Chelae_res_mean~lo(meaninvyr, span=1), family=gaussian(link='identity'), 
-#                      data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
-#                                          craydat_stat$ncray >5 & !is.na(craydat_stat$AFDWmean),])
-# summary(gam_chela_yr)
-# plot(gam_chela_yr)
-
-# craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
-#                craydat_stat$ncray >5 & !is.na(craydat_stat$AFDWmean), 'gam_chela_yr'] <- predict(gam_chela_yr)
-# craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
-#                craydat_stat$ncray >5 & !is.na(craydat_stat$AFDWmean), 'gam_chela_yr_se'] <- predict(gam_chela_yr, se.fit=T)$se.fit
-
-ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | 
-                       craydat_stat$River_Tributary == 'Lower mainstem') & 
-                      craydat_stat$ncray > 5 & !is.na(craydat_stat$AFDWmean),], aes(x=Spread_dist, y=Chelae_res_mean))+
-  geom_ribbon(aes(ymin = (gam_chela_yr-1.96*gam_chela_yr_se), ymax = (gam_chela_yr+1.96*gam_chela_yr_se), fill=River_Tributary), alpha=0.3)+
-  geom_point(aes(color=River_Tributary), size=4)+ 
-  geom_line(aes(y=(gam_chela_yr)), size=1.1) +
-  scale_y_continuous(name='Carapace length (mm)', breaks=c(10,15,20,25,30)) +
-  scale_x_continuous(name='Distance from invasion source', expand=c(0,0)) +
-  #geom_text(aes(label=Site)) +
-  scale_fill_discrete(name='Tributary (95% CI)') + 
-  scale_color_discrete(name='Tributary (95% CI)') +
-  theme_classic() 
 
 ##TS basis for environment (thin plate regression spline, penalized regression spline)
 mgcv_chela_degdays <- mgcv::gam(Chelae_res_mean~s(degdays), family=gaussian(link='identity'),
@@ -3039,7 +3093,7 @@ par(mfrow=c(1,1))
 #        aes(x=AFDWmean, y=Chelae_res_mean)) + geom_point() + geom_line(aes(y=mgcv_chela_AFDW)) + geom_text(aes(label=Site))
 # 
 
-mgcv_chela_AFDW <- mgcv::gam(Chelae_res_mean~s(AFDWmean, k=3), family=gaussian(link='identity'),
+mgcv_chela_AFDW <- mgcv::gam(Chelae_res_mean~s(AFDWmean, k=7), family=gaussian(link='identity'),
                                 data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                     craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_chela_AFDW)
@@ -3049,10 +3103,13 @@ par(mfrow=c(2,2))
 gam.check(mgcv_chela_AFDW)
 par(mfrow=c(1,1))
 
-mgcv_chela_green <- mgcv::gam(Chelae_res_mean~s(greenmean, k=3), family=gaussian(link='identity'),
+mgcv_chela_green <- mgcv::gam(Chelae_res_mean~greenmean, family=gaussian(link='identity'),
                                 data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                     craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_chela_green)
+ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
+                      craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),],
+       aes(x=greenmean, Chelae_res_mean)) + geom_point() + geom_smooth(method='lm')
 plot(mgcv_chela_green,residuals=TRUE,shade=T, cex=6)
 AIC(mgcv_chela_green)
 par(mfrow=c(2,2))
@@ -3097,6 +3154,20 @@ AIC(mgcv_chela_CPUE)
 par(mfrow=c(2,2))
 gam.check(mgcv_chela_CPUE)
 par(mfrow=c(1,1))
+
+#CPUE and Spread dist
+mgcv_chela_CPUEsp <- mgcv::gam(Chelae_res_mean~s(Kick_mean,k=3)+ s(Spread_dist), family=gaussian(link='identity'),
+                             data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
+                                                 craydat_stat$ncray >10& !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
+summary(mgcv_chela_CPUEsp)
+plot(mgcv_chela_CPUEsp,residuals=TRUE,shade=T, cex=6)
+TRUE
+TRUE
+AIC(mgcv_chela_CPUEsp)
+par(mfrow=c(2,2))
+gam.check(mgcv_chela_CPUEsp)
+par(mfrow=c(1,1))
+concurvity(mgcv_chela_CPUEsp)
 
 #CPUE With all sites
 mgcv_chela_CPUE <- mgcv::gam(Chelae_res_mean~s(Kick_mean,k=3), family=gaussian(link='identity'),
@@ -3172,9 +3243,9 @@ shapiro.test(craydatOR[craydatOR$Site == 25,'CL_ChelaL_nls_res'])
 leveneTest(CL_ChelaL_nls_res ~ factor(Site), data=craydatOR[craydatOR$River_Tributary == 'North Fork' & (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),])
 
 #Welch's t-test
-wilcox_chela_sp <- wilcox.test(craydatOR[craydatOR$Site==20,'CL'], craydatOR[craydatOR$Site==25,'CL_ChelaL_nls_res'],  var.equal = T)
-wilcox_chela_sp
-
+ttest_chela_sp <- t.test(craydatOR[craydatOR$Site==20,'CL_ChelaL_nls_res'], craydatOR[craydatOR$Site==25,'CL_ChelaL_nls_res'],var.equal = T)
+ttest_chela_sp
+ggplotly(ggplot(craydatOR[craydatOR$Site %in% c(20, 25),], aes(x=factor(Site), y=CL_ChelaL_nls_res)) + geom_boxplot())
 
 #####SF######
 ggplot(craydat_stat[craydat_stat$River_Tributary == 'South Fork' & 
@@ -3192,38 +3263,16 @@ shapiro.test(craydatOR[craydatOR$Site == 43,'CL_ChelaL_nls_res'])
 leveneTest(CL_ChelaL_nls_res ~ factor(Site), data=craydatOR[craydatOR$River_Tributary == 'South Fork' & (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),])
 
 #T-test with welch's correction
-wilcox_chela_sp <- wilcox.test(CL_ChelaL_nls_res ~ Site, 
-                         data=craydatOR[craydatOR$River_Tributary == 'South Fork' & !is.na(craydatOR$AFDWmean) &  (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),],
-                         var.equal=F)
-wilcox_chela_sp
-
-#####ALL SITES#####
-gam_chela_sp <-  gam(Chelae_res_mean~lo(Spread_dist, span=1), family=gaussian(link='identity'), 
-                     data=craydat_stat[craydat_stat$ncray > 10 & !is.na(craydat_stat$AFDWmean),])
-summary(gam_chela_sp)
-plot(gam_chela_sp)
-
-
-gam_chela_yr <-  gam(Chelae_res_mean~lo(meaninvyr, span=1), family=gaussian(link='identity'), 
-                     data=craydat_stat[craydat_stat$ncray > 10 & !is.na(craydat_stat$AFDWmean),])
-summary(gam_chela_yr)
-plot(gam_chela_yr)
-
-
-gam_chela_env <-  gam(Chelae_res_mean~degdays+AFDWmean+greenmean+diatommean, family=gaussian(link='identity'), 
-                      data=craydat_stat[craydat_stat$ncray > 10 & !is.na(craydat_stat$AFDWmean),])
-summary(gam_chela_env)
-
-ggplot(craydat_stat[craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem' & craydat_stat$ncray > 5,], aes(x=meaninvyr, y=CL_sd))+geom_point()+geom_smooth(span=2)
-ggplot(craydat_stat[craydat_stat$ncray > 10,], aes(x=meaninvyr, y=CL_sd))+geom_point()+geom_smooth(span=1)
-
+ttest_chela_sp <- t.test(craydatOR[craydatOR$Site==41,'CL_ChelaL_nls_res'], craydatOR[craydatOR$Site==43,'CL_ChelaL_nls_res'],var.equal = T)
+ttest_chela_sp
 ##############################################################################################
 
 ###################################### MODELS FOR TP #########################################
 #Test the influence of Sex
+TP_sex_cray_lme_int <- lmer(trophiclevel ~ (1|Site), data=craydatOR, REML=F)
 TP_sex_cray_lme <- lmer(trophiclevel ~ Sex  + (1|Site), data=craydatOR, REML=F)
 summary(TP_sex_cray_lme)
-anova(TP_sex_cray_lme)
+anova(TP_sex_cray_lme_int, TP_sex_cray_lme)
 
 ggplot(craydatOR[craydatOR$Site %in% craydat_stat[craydat_stat$ncray>=10,'Site'],], aes(x=Sex, y=trophiclevel)) + geom_boxplot() + facet_wrap(~Site)
 
@@ -3363,7 +3412,7 @@ ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_
 
 
 #Thin plate regression smoother for environment
-mgcv_TP_degdays <- gam(trophiclevel_mean~s(degdays, k=4), family=gaussian(link='identity'),
+mgcv_TP_degdays <- gam(trophiclevel_mean~s(degdays, k=3), family=gaussian(link='identity'),
                   data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                       craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_TP_degdays)
@@ -3581,7 +3630,7 @@ summary(mgcv_RD_inter)
 AIC(mgcv_RD_inter)
 
 #TS basis for Spread_dist (thin plate regression spline, penalized regression spline)
-mgcv_RD_sp <- mgcv::gam(RNADNAratio_mean~Spread_dist, family=gaussian(link='identity'),
+mgcv_RD_sp <- mgcv::gam(RNADNAratio_mean~s(Spread_dist,k =4), family=gaussian(link='identity'),
                            data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_RD_sp)
@@ -3843,9 +3892,10 @@ ggplot(craydat_stat[craydat_stat$ncray > 10,], aes(x=meaninvyr, y=trophiclevel_m
 
 ###################################### MODELS FOR CL MEAN ####################################
 ##### All samples
+CL_sex_cray_lme_nosex <- lmer(log(CL) ~ (1|Site), data=craydatOR, REML=F)
 CL_sex_cray_lme <- lmer(log(CL) ~ Sex  + (1|Site), data=craydatOR, REML=F)
 summary(CL_sex_cray_lme)
-anova(CL_sex_cray_lme)
+anova(CL_sex_cray_lme_nosex, CL_sex_cray_lme)
 
 ggplot(craydatOR[craydatOR$Site %in% craydat_stat[craydat_stat$ncray>=10,'Site'],], aes(x=Sex, y=CL)) + geom_boxplot() + facet_wrap(~Site)
 
@@ -4020,7 +4070,7 @@ concurvity(mgcv_CL_AFDWgreen)
 # par(mfrow=c(2,2))
 # plot(gam_CL_env, resid=T, pch=16)
 
-mgcv_CL_sex <- lme(CL~sex + , family=gaussian(link='identity'),
+mgcv_CL_sex <- mgcv::gam(CL_mean~s(sexratio,k=3), family=gaussian(link='identity'),
                          data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                              craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_CL_sex)
@@ -4245,7 +4295,7 @@ ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_
 # par(mfrow=c(2,2))
 # plot(gam_CLsd_env, resid=T, pch=16)
 
-mgcv_CLsd_CPUE <- mgcv::gam(CL_sd~s(Kick_mean,k=5), family=gaussian(link='identity'),
+mgcv_CLsd_CPUE <- mgcv::gam(CL_sd~s(Kick_mean,k=3), family=gaussian(link='identity'),
                             data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                 craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_CLsd_CPUE )
@@ -4435,7 +4485,7 @@ par(mfrow=c(2,2))
 gam.check(mgcv_weight_AFDW)
 par(mfrow=c(1,1))
 
-mgcv_weight_green <- mgcv::gam(Weight_res_mean~s(greenmean,k=4), family=gaussian(link='identity'),
+mgcv_weight_green <- mgcv::gam(Weight_res_mean~greenmean, family=gaussian(link='identity'),
                                data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                    craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_weight_green)
@@ -4456,7 +4506,7 @@ gam.check(mgcv_weight_diatom)
 par(mfrow=c(1,1))
 
 
-mgcv_weight_degAFDW <- mgcv::gam(Weight_res_mean~s(degdays)+s(AFDWmean, k=5), family=gaussian(link='identity'),
+mgcv_weight_degAFDW <- mgcv::gam(Weight_res_mean~s(degdays)+s(AFDWmean, k=3), family=gaussian(link='identity'),
                                  data=craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                      craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean)& !is.na(craydat_stat$trophiclevel_mean),])
 summary(mgcv_weight_degAFDW)
@@ -4577,31 +4627,30 @@ ggplot(craydatOR[craydatOR$River_Tributary == 'North Fork' &
                    craydatOR$Site %in%  craydat_stat[craydat_stat$ncray > 10,'Site'],], aes(x=CL_weight_lm_res)) + geom_histogram()
 
 #Test normality of data with Shapiro-Wilk test
-shapiro.test(craydatOR[craydatOR$Site == 20 & is.na(craydatOR$Miss_App),'CL_weight_lm_res'])
-shapiro.test(craydatOR[craydatOR$Site == 25,'CL_weight_lm_res'])
+shapiro.test(craydatOR[craydatOR$Site == 20 & is.na(craydatOR$Miss_App),'CL_Weight_nls_res'])
+shapiro.test(craydatOR[craydatOR$Site == 25,'CL_Weight_nls_res'])
 #Test for equal variances
 leveneTest(CL_weight_lm_res ~ factor(Site), data=craydatOR[craydatOR$River_Tributary == 'North Fork' & (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),])
 
-#Welch's t-test
-ttest_weight_sp <- t.test(craydatOR[craydatOR$Site==20,'CL'], craydatOR[craydatOR$Site==25,'CL_weight_lm_res'], var.equal = T)
-ttest_weight_sp
 
+wilcox_weight_sp <- wilcox.test(CL_Weight_nls_res ~ Site, data=craydatOR[craydatOR$River_Tributary == 'North Fork' & !is.na(craydatOR$AFDWmean) &                                                                    (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),],var.equal=T)
+wilcox_weight_sp
 
 #####SF######
 ggplot(craydat_stat[craydat_stat$River_Tributary == 'South Fork' & 
                       craydat_stat$ncray > 10,], aes(x=Spread_dist, y=Weight_res_mean))+geom_col()+
   geom_errorbar(aes(ymin=Weight_res_mean-1.96*Weight_res_se, ymax=Weight_res_mean+1.96*Weight_res_se))
 ggplot(craydatOR[craydatOR$River_Tributary == 'South Fork' &  
-                   craydatOR$Site %in%  craydat_stat[craydat_stat$ncray > 10,'Site'],], aes(x=CL_weight_lm_res)) + geom_histogram()
+                   craydatOR$Site %in%  craydat_stat[craydat_stat$ncray > 10,'Site'],], aes(x=CL_Weight_nls_res)) + geom_histogram()
 
 #Test normality of data with Shapiro-Wilk test
-shapiro.test(craydatOR[craydatOR$Site == 41,'CL_weight_lm_res'])
-shapiro.test(craydatOR[craydatOR$Site == 43,'CL_weight_lm_res'])
+shapiro.test(craydatOR[craydatOR$Site == 41,'CL_Weight_nls_res'])
+shapiro.test(craydatOR[craydatOR$Site == 43,'CL_Weight_nls_res'])
 #Test for equal variances
-leveneTest(CL_weight_lm_res ~ factor(Site), data=craydatOR[craydatOR$River_Tributary == 'South Fork' & (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),])
+leveneTest(CL_Weight_nls_res ~ factor(Site), data=craydatOR[craydatOR$River_Tributary == 'South Fork' & (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),])
 
-#t-test with welch's correction
-wilcox_weight_sp <- wilcox.test(CL_weight_lm_res ~ Site, data=craydatOR[craydatOR$River_Tributary == 'South Fork' & !is.na(craydatOR$AFDWmean) &                                                                    (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),],var.equal=T)
+#Wilcox test
+wilcox_weight_sp <- wilcox.test(CL_Weight_nls_res ~ Site, data=craydatOR[craydatOR$River_Tributary == 'South Fork' & !is.na(craydatOR$AFDWmean) &                                                                    (craydatOR$Site %in% craydat_stat[craydat_stat$ncray > 10,'Site']),],var.equal=T)
 wilcox_weight_sp
 
 #####ALL SITES#####
@@ -4792,10 +4841,6 @@ prop.test(sextable_SF, correct=T)
 # Make figures of tributaries using edges_18_updist.shp in HexSim/Crayfish_model/Network_module/Network_18
 #Find in python after join
 
-#Get river kilomter of tributary confluences (modify JDNF to match with site 2 even though Site 2 interval is slightly off - to help reader see confluence)
-JDNF2 <- 292349
-confluences <- c(0, 379.179-c(JDSF/1000, JDNF2/1000))
-
 #Get images of edges
 img <- readPNG(file.path(figdir,"Minimaps/mainstem3.png"))
 g <- rasterGrob(img, interpolate=TRUE)
@@ -4908,14 +4953,37 @@ TP_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(cray
 #grid.draw(rbind(ggplotGrob(TP_spreadist_upst), ggplotGrob(TP_spreadist_main)))
 
 ##########RNADNA Figure###########
-#Get river kilometer of tributary confluences
+
 RNADNA_spreadist_main <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
                                                craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean) & !is.na(craydat_stat$trophiclevel_mean),], 
-                                aes(x = Spread_dist, y = RNADNAratio_mean)) +
+                                aes(x = Kick_mean, y = RNADNAratio_mean)) +
   geom_linerange(aes(ymin=RNADNAratio_mean-RNADNAratio_SE, ymax=RNADNAratio_mean+RNADNAratio_SE), alpha=0.75, size=1, color='#67a9cf') +
   geom_ribbon(aes(ymin =(gam_RD_sp-1.96*gam_RD_sp_se), ymax = (gam_RD_sp+1.96*gam_RD_sp_se)), alpha=0.75, fill='#bdc9e1')+
   geom_point(size=3, alpha=0.75, color='#1c9099')+ 
-  geom_line(aes(y=(gam_RD_sp)), size=1, color='#016c59') +
+  geom_smooth(method='lm') +
+  #geom_line(aes(y=(gam_RD_sp)), size=1, color='#016c59') +
+  #geom_vline(xintercept = confluences) +
+  #geom_text(aes(label=Site), nudge_y=-0.2)+
+  #annotate('text', x=260,y=3, label='Downstream', angle=90, size=2.5, color='#016c59') +
+  #annotate('text', x=160, y=0.7, label='Mainstem', size=2.5) +
+  theme_classic() + 
+  scale_x_continuous(expand=c(0,0), name='Distance from initial introduction (km)') +
+  scale_y_continuous(limits=c(0,7), expand=c(0,0), breaks=c(0,2,4,6), name='Physiological fitness (RNA/DNA)') + 
+  theme(plot.margin=unit(c(0,0,0.1,0), "cm"), 
+        axis.title.y=element_text(size=9),
+        axis.title.x=element_text(vjust=0.5, hjust=-0.1, size=9))
+
+
+#Get river kilometer of tributary confluences
+RNADNA_spreadist_main <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'Upper mainstem' | craydat_stat$River_Tributary == 'Lower mainstem') & 
+                                               craydat_stat$ncray >10 & !is.na(craydat_stat$AFDWmean) & !is.na(craydat_stat$trophiclevel_mean) &
+                                               craydat_stat$RNADNAratio_mean < 4,], 
+                                aes(x = Spread_dist, y = RNADNAratio_mean)) +
+  geom_linerange(aes(ymin=RNADNAratio_mean-RNADNAratio_SE, ymax=RNADNAratio_mean+RNADNAratio_SE), alpha=0.75, size=1, color='#67a9cf') +
+  #geom_ribbon(aes(ymin =(gam_RD_sp-1.96*gam_RD_sp_se), ymax = (gam_RD_sp+1.96*gam_RD_sp_se)), alpha=0.75, fill='#bdc9e1')+
+  geom_point(size=3, alpha=0.75, color='#1c9099')+ 
+  geom_smooth(method='lm') +
+  #geom_line(aes(y=(gam_RD_sp)), size=1, color='#016c59') +
   geom_vline(xintercept = confluences) +
   #geom_text(aes(label=Site), nudge_y=-0.2)+
   annotate('text', x=260,y=3, label='Downstream', angle=90, size=2.5, color='#016c59') +
@@ -5012,6 +5080,7 @@ CL_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(cray
 # pdf(file.path(figdir,'Trends/CL_sp.pdf'), width=5, height=3)
 # grid.draw(rbind(ggplotGrob(CL_spreadist_upst), ggplotGrob(CL_spreadist_main)))
 # dev.off()
+
 ##########CLsd Figure ######
 CLsdsegdat <- data.frame(x1=c(57, 90), x2=c(71, 112), y1=c(9, 10), y2=c(9, 10))
 
@@ -5079,7 +5148,7 @@ weight_spreadist_main <- ggplot(craydat_stat[(craydat_stat$River_Tributary == 'U
   theme(plot.margin=unit(c(0,0.05,0,0), "cm"),
         axis.title.y = element_text(hjust=1.25),
         axis.title.x = element_blank())
-#weight_spreadist_main
+weight_spreadist_main
 
 # 
 weight_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(craydat_stat$AFDWmean) &
@@ -5103,10 +5172,10 @@ weight_spreadist_upst  <- ggplot(craydat_stat[craydat_stat$ncray >=10  & !is.na(
         axis.text.x= element_blank(),
         plot.margin=unit(c(0.25,0,-0.1,0), "cm"),
         axis.title.y = element_blank())
-#weight_spreadist_upst
+weight_spreadist_upst
 # 
-# grid.newpage()
-# grid.draw(rbind(ggplotGrob(weight_spreadist_upst), ggplotGrob(weight_spreadist_main)))
+grid.newpage()
+grid.draw(rbind(ggplotGrob(weight_spreadist_upst), ggplotGrob(weight_spreadist_main)))
 
 
 
