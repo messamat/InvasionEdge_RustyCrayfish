@@ -1472,6 +1472,14 @@ TL_ChelaL_trib2 <- ggplot(craydat, aes(x = CL_ChelaL_nls_res, y = trophiclevel))
 TL_ChelaL_trib2
 ggsave('cray_TL95_ChelaL_trib2.png', plot=TL_ChelaL_trib2)
 
+TL_ChelaL_site <- ggplot(craydat, aes(x = CL_ChelaL_nls_res, y = trophiclevel)) +
+  geom_point(aes(color=factor(River_Tributary)), size=4, alpha=1/2)+ 
+  geom_text(aes(label = Site, size = 2)) +
+  geom_smooth(method='lm') +
+  facet_wrap(~Site, scales='free')
+TL_ChelaL_site
+ggsave('cray_TL95_ChelaL_site.png', plot=TL_ChelaL_site)
+
 TL_sex_trib <- ggplot(craydat, aes(x = Sex, y = trophiclevel)) +
   geom_point(aes(color=River_Tributary), size=4, alpha=1/2)+ 
   geom_text(aes(label = Site, size = 2), alpha=1/3) 
@@ -2710,6 +2718,37 @@ ggplot(craydat, aes(x=TL_spreadall_pred,y=trophiclevel, color=River_Tributary,sh
 drop1(TL_spreadall_cray_lme,test="Chisq")
 confint(TL_meaninvall_cray_lme,oldNames = FALSE)
 
+#Check relationship between chela length and TL within sites
+TL_chela_cray_lme <- lmer(trophiclevel ~ Chelae_L + 
+                                (1|Site) + (1|Meso_type), 
+                              data=craydat[craydat$Site %in% craydat_stat[craydat_stat$ncray >10, 'Site'],], REML=F)
+summary(TL_chela_cray_lme)
+plot(TL_chela_cray_lme)
+qqnorm(residuals(TL_chela_cray_lme))
+craydat[craydat$Site %in% 
+          craydat_stat[craydat_stat$ncray >10, 'Site'],'TL_chela_pred'] <- predict(TL_chela_cray_lme, 
+                                                                                                   craydat[craydat$Site %in% craydat_stat[craydat_stat$ncray >10, 'Site'],],allow.new.levels=T)
+ggplot(craydat[craydat$Site %in% craydat_stat[craydat_stat$ncray >10, 'Site'],],
+       aes(x=TL_chela_pred ,y=trophiclevel, color=River_Tributary,shape=Method))+
+  geom_point()+
+  geom_abline(slope=1, intercept=0) + 
+  facet_wrap(~Site, scales='free')
+confint(TL_chela_cray_lme,oldNames = FALSE)
+
+#Check relationship between chela length/CL residuals and TL within sites
+TL_chela_cray_lme <- lmer(trophiclevel ~ CL_ChelaL_nls_res + 
+                            (1|Site) + (1|Meso_type), 
+                          data=craydat[craydat$Site %in% craydat_stat[craydat_stat$ncray >10, 'Site'],], REML=F)
+summary(TL_chela_cray_lme)
+plot(TL_chela_cray_lme)
+qqnorm(residuals(TL_chela_cray_lme))
+craydat[,'TL_chela_pred'] <- predict(TL_chela_cray_lme, craydat[craydat$Site %in% craydat_stat[craydat_stat$ncray >10, 'Site'],],allow.new.levels=T)
+ggplot(craydat, aes(x=TL_chela_pred ,y=trophiclevel, color=River_Tributary,shape=Method))+
+  geom_point()+
+  geom_abline(slope=1, intercept=0) + 
+  facet_wrap(~Site, scales='free')
+confint(TL_chela_cray_lme,oldNames = FALSE)
+
 ##### RNA/DNA - POSITIVE BUT TEMP and ADFW COLLINEAR BUT NOT MAINLY DRIVEN BY TEMP###########
 #Using samples from all methods but only from those sites with AFDW - with invasion year -- too much collinearity (e.g. invasion year negatively correlated)
 RNADNAratio_meaninvall_cray_lme <- lmer(log(RNADNAratio) ~  sqrt(meaninvyr) + X2016.07.01 + log(CL) + sqrt(Kick_mean) +
@@ -3295,6 +3334,20 @@ summary(TP_inter_cray_lme)
 TP_CL_cray_lme <- lmer(trophiclevel ~ CL  + (1|Site), data=craydatOR, REML=F)
 summary(TP_CL_cray_lme)
 anova(TP_CL_cray_lme)
+confint(TP_CL_cray_lme)
+
+#Test the influence of chela length
+TP_ChelaL_cray_lme <- lmer(trophiclevel ~ Chelae_L  + (1|Site), data=craydatOR, REML=F)
+summary(TP_ChelaL_cray_lme)
+anova(TP_ChelaL_cray_lme)
+confint(TP_ChelaL_cray_lme)
+
+TP_ChelaLres_cray_lme <- lmer(trophiclevel ~  CL_ChelaL_nls_res + (1|Site), data=craydatOR, REML=F)
+summary(TP_ChelaLres_cray_lme)
+anova(TP_ChelaLres_cray_lme)
+confint(TP_ChelaLres_cray_lme)
+
+
 
 #####MAINSTEM#####
 #NULL MODEL
